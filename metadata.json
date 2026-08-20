@@ -1,0 +1,8 @@
+{
+  "name": "Remix Space Debris Tracking \u0026 Collision Risk Dashboard",
+  "description": "Orbital propagation, SGP4 trajectory generation, pairwise close-approach conjunction detection, explainable risk scoring, and interactive 2D/3D visualizations for space debris and satellites.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
