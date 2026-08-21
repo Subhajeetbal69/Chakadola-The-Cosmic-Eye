@@ -56,11 +56,26 @@ export const Orbit3DView: React.FC<Orbit3DViewProps> = React.memo(({
   // Display & Simulation State
   const [filterMode, setFilterMode] = useState<'ALL' | 'DEBRIS_ONLY' | 'ACTIVE_ONLY' | 'HAZARDS_ONLY'>('ALL');
   const [showOrbitLines, setShowOrbitLines] = useState<boolean>(true);
-  const [showClouds, setShowClouds] = useState<boolean>(true);
+  const [showClouds, setShowClouds] = useState<boolean>(false);
   const [globeBrightness, setGlobeBrightness] = useState<'NORMAL' | 'BRIGHT' | 'SUPER_BRIGHT'>('BRIGHT');
   const [simSpeed, setSimSpeed] = useState<number>(60);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [isFollowCam, setIsFollowCam] = useState<boolean>(false);
+  const [showShiftScrollPrompt, setShowShiftScrollPrompt] = useState<boolean>(false);
+  const shiftScrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const triggerShiftScrollPrompt = useCallback(() => {
+    setShowShiftScrollPrompt(true);
+    if (shiftScrollTimeoutRef.current) {
+      clearTimeout(shiftScrollTimeoutRef.current);
+    }
+    shiftScrollTimeoutRef.current = setTimeout(() => {
+      setShowShiftScrollPrompt(false);
+    }, 1800);
+  }, []);
+
+  const triggerShiftScrollPromptRef = useRef<() => void>(triggerShiftScrollPrompt);
+  triggerShiftScrollPromptRef.current = triggerShiftScrollPrompt;
 
   // Selected / Caught Object State (Starts untargeted by default)
   const [caughtObject, setCaughtObject] = useState<TrackedObjectSummary | null>(selectedObject || null);
@@ -473,6 +488,7 @@ export const Orbit3DView: React.FC<Orbit3DViewProps> = React.memo(({
       roughness: 0.95
     });
     const cloudsMesh = new THREE.Mesh(cloudsGeo, cloudsMat);
+    cloudsMesh.visible = false;
     scene.add(cloudsMesh);
     cloudsMeshRef.current = cloudsMesh;
 
@@ -697,15 +713,25 @@ export const Orbit3DView: React.FC<Orbit3DViewProps> = React.memo(({
     };
 
     const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      // Normalize delta across browsers/trackpads (pixel vs line vs page delta modes)
-      let delta = e.deltaY;
-      if (e.deltaMode === 1) delta *= 20; // lines
-      else if (e.deltaMode === 2) delta *= 80; // pages
+      if (e.shiftKey) {
+        e.preventDefault();
+        if (shiftScrollTimeoutRef.current) {
+          clearTimeout(shiftScrollTimeoutRef.current);
+        }
+        setShowShiftScrollPrompt(false);
 
-      // Proportional exponential smooth multiplier
-      const zoomScale = Math.exp(delta * 0.0011);
-      targetRadiusRef.current = Math.max(8.5, Math.min(125, targetRadiusRef.current * zoomScale));
+        // Normalize delta across browsers/trackpads (pixel vs line vs page delta modes)
+        let delta = e.deltaY;
+        if (e.deltaMode === 1) delta *= 20; // lines
+        else if (e.deltaMode === 2) delta *= 80; // pages
+
+        // Proportional exponential smooth multiplier
+        const zoomScale = Math.exp(delta * 0.0011);
+        targetRadiusRef.current = Math.max(8.5, Math.min(125, targetRadiusRef.current * zoomScale));
+      } else {
+        // Prompt user that Shift + Scroll is required for zooming the 3D model
+        triggerShiftScrollPromptRef.current();
+      }
     };
 
     // Touch Event Handlers for Mobile & Trackpad Pinch-to-Zoom
@@ -960,6 +986,9 @@ export const Orbit3DView: React.FC<Orbit3DViewProps> = React.memo(({
 
     return () => {
       cancelAnimationFrame(animId);
+      if (shiftScrollTimeoutRef.current) {
+        clearTimeout(shiftScrollTimeoutRef.current);
+      }
       resizeObserver.disconnect();
       dom.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mousemove', onMouseMove);
@@ -1457,6 +1486,19 @@ export const Orbit3DView: React.FC<Orbit3DViewProps> = React.memo(({
       {/* 3D WebGL Canvas Mount */}
       <div ref={mountRef} className="w-full h-[520px] bg-[#01030a] cursor-grab active:cursor-grabbing" />
 
+      {/* Shift + Scroll Instruction Overlay */}
+      {showShiftScrollPrompt && (
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-30 transition-opacity duration-300">
+          <div className="bg-slate-950/90 backdrop-blur-xl border border-cyan-500/50 px-4 py-2.5 rounded-2xl shadow-[0_0_35px_rgba(6,182,212,0.35)] flex items-center gap-2.5 text-xs font-mono text-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <kbd className="px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-400/50 text-cyan-300 font-bold text-[11px] shadow-sm tracking-wider">
+              ⇧ Shift
+            </kbd>
+            <span className="text-slate-400 font-sans text-xs">+</span>
+            <span className="text-white font-medium">Scroll to zoom 3D globe</span>
+          </div>
+        </div>
+      )}
+
 
       {/* CAUGHT SATELLITE & DEBRIS INTEL HUD (Includes Integrated Velocity Speedometer) */}
       {caughtObject && (
@@ -1693,7 +1735,7 @@ export const Orbit3DView: React.FC<Orbit3DViewProps> = React.memo(({
             <span className="opacity-40">•</span>
             <span>Drag to Rotate</span>
             <span className="opacity-40">•</span>
-            <span>Scroll to Zoom</span>
+            <span>Shift + Scroll to Zoom</span>
           </div>
         )}
       </div>
