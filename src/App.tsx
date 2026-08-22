@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+npm installimport React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Header
 } from './components/Header';
@@ -41,18 +41,86 @@ import {
   LiveTelemetryObject,
   ConjunctionSyncState
 } from './types';
-import {
-  Orbit,
-  Globe,
-  Layers,
-  LineChart,
-  Calculator,
-  ShieldAlert,
-  Radio,
-  CheckCircle2,
-  AlertTriangle,
-  Focus
-} from 'lucide-react';
+import { Orbit, Globe, Layers, ShieldAlert, Radio, CheckCircle2, AlertTriangle } from 'lucide-react';
+
+interface TelemetryStateSetters {
+  setObjects: React.Dispatch<React.SetStateAction<TrackedObjectSummary[]>>;
+  setSelectedObject: React.Dispatch<React.SetStateAction<TrackedObjectSummary | null>>;
+}
+
+function updateLiveTelemetry(
+  liveMap: Map<string, LiveTelemetryObject>,
+  { setObjects, setSelectedObject }: TelemetryStateSetters
+) {
+  setObjects((prev) => {
+    if (prev.length === 0) return prev;
+
+    return prev.map((obj) => {
+      const live = liveMap.get(obj.id);
+      if (!live) return obj;
+
+      return {
+        ...obj,
+        currentPosition: live.pos,
+        positionKm: live.pos,
+        currentVelocity: live.vel,
+        speedKmS: live.speedKmS,
+        altitudeKm: live.altKm,
+        lat: live.lat,
+        lng: live.lng
+      };
+    });
+  });
+
+  setSelectedObject((prev) => {
+    if (!prev) return null;
+
+    const live = liveMap.get(prev.id);
+    if (!live) return prev;
+
+    return {
+      ...prev,
+      currentPosition: live.pos,
+      positionKm: live.pos,
+      currentVelocity: live.vel,
+      speedKmS: live.speedKmS,
+      altitudeKm: live.altKm,
+      lat: live.lat,
+      lng: live.lng
+    };
+  });
+}
+
+function createLiveTelemetryMap(objects: LiveTelemetryObject[]) {
+  return new Map(objects.map((item) => [item.id, item]));
+}
+
+function updateLiveTelemetry(
+  liveMap: Map<string, LiveTelemetryObject>,
+  setObjects: React.Dispatch<React.SetStateAction<TrackedObjectSummary[]>>,
+  setSelectedObject: React.Dispatch<React.SetStateAction<TrackedObjectSummary | null>>
+) {
+  setObjects((prev) => prev.map((obj) => {
+    const live = liveMap.get(obj.id);
+    return live ? { ...obj, currentPosition: live.pos, positionKm: live.pos, currentVelocity: live.vel, speedKmS: live.speedKmS, altitudeKm: live.altKm, lat: live.lat, lng: live.lng } : obj;
+  }));
+
+  setSelectedObject((prev) => {
+    if (!prev) return null;
+    const live = liveMap.get(prev.id);
+    return live ? { ...prev, currentPosition: live.pos, positionKm: live.pos, currentVelocity: live.vel, speedKmS: live.speedKmS, altitudeKm: live.altKm, lat: live.lat, lng: live.lng } : prev;
+  });
+}
+
+function getSafeConjunctionSelection(conjunctions: ConjunctionEvent[], previous: ConjunctionEvent | null) {
+  if (!conjunctions.length) return null;
+  return conjunctions.find((c) => c.id === previous?.id) || conjunctions[0];
+}
+
+function sendWebSocketAction(wsRef: React.MutableRefObject<WebSocket | null>, action: string) {
+  if (wsRef.current?.readyState === WebSocket.OPEN)
+    wsRef.current.send(JSON.stringify({ action }));
+}
 
 export default function App() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -111,16 +179,9 @@ export default function App() {
       const safeConjunctions = Array.isArray(conjRes) ? conjRes : [];
       setConjunctions(safeConjunctions);
 
-      if (safeConjunctions.length > 0) {
-        setSelectedConjunction((prev) => {
-          if (prev && safeConjunctions.some((c) => c.id === prev.id)) {
-            return safeConjunctions.find((c) => c.id === prev.id) || safeConjunctions[0];
-          }
-          return safeConjunctions[0];
-        });
-      } else {
-        setSelectedConjunction(null);
-      }
+      setSelectedConjunction((prev) =>
+        getSafeConjunctionSelection(safeConjunctions, prev)
+      );
     } catch (err) {
       console.error('Failed loading telemetry data:', err);
       showToast('Error connecting to astrodynamics server', 'warn');
@@ -171,55 +232,15 @@ export default function App() {
                 liveMap.set(item.id, item);
               }
 
-              setObjects((prev) => {
-                if (prev.length === 0) return prev;
-                return prev.map((obj) => {
-                  const live = liveMap.get(obj.id);
-                  if (live) {
-                    return {
-                      ...obj,
-                      currentPosition: live.pos,
-                      positionKm: live.pos,
-                      currentVelocity: live.vel,
-                      speedKmS: live.speedKmS,
-                      altitudeKm: live.altKm,
-                      lat: live.lat,
-                      lng: live.lng
-                    };
-                  }
-                  return obj;
-                });
-              });
-
-              // Keep selected object synced
-              setSelectedObject((prev) => {
-                if (!prev) return null;
-                const live = liveMap.get(prev.id);
-                if (live) {
-                  return {
-                    ...prev,
-                    currentPosition: live.pos,
-                    positionKm: live.pos,
-                    currentVelocity: live.vel,
-                    speedKmS: live.speedKmS,
-                    altitudeKm: live.altKm,
-                    lat: live.lat,
-                    lng: live.lng
-                  };
-                }
-                return prev;
-              });
+              updateLiveTelemetry(liveMap, { setObjects, setSelectedObject });
             } else if (data.type === 'initial_state' || data.type === 'conjunction_update') {
               if (data.status) setStatus(data.status);
               if (Array.isArray(data.objects)) setObjects(data.objects);
               if (Array.isArray(data.conjunctions)) {
                 setConjunctions(data.conjunctions);
-                setSelectedConjunction((prev) => {
-                  if (prev && data.conjunctions.some((c) => c.id === prev.id)) {
-                    return data.conjunctions.find((c) => c.id === prev.id) || data.conjunctions[0];
-                  }
-                  return data.conjunctions.length > 0 ? data.conjunctions[0] : null;
-                });
+                setSelectedConjunction((prev) =>
+                  getSafeConjunctionSelection(data.conjunctions, prev)
+                );
               }
             } else if (data.type === 'pong') {
               const latency = Date.now() - pingStartRef.current;
@@ -307,43 +328,7 @@ export default function App() {
             liveMap.set(item.id, item);
           }
 
-          setObjects((prev) => {
-            if (prev.length === 0) return prev;
-            return prev.map((obj) => {
-              const live = liveMap.get(obj.id);
-              if (live) {
-                return {
-                  ...obj,
-                  currentPosition: live.pos,
-                  positionKm: live.pos,
-                  currentVelocity: live.vel,
-                  speedKmS: live.speedKmS,
-                  altitudeKm: live.altKm,
-                  lat: live.lat,
-                  lng: live.lng
-                };
-              }
-              return obj;
-            });
-          });
-
-          setSelectedObject((prev) => {
-            if (!prev) return null;
-            const live = liveMap.get(prev.id);
-            if (live) {
-              return {
-                ...prev,
-                currentPosition: live.pos,
-                positionKm: live.pos,
-                currentVelocity: live.vel,
-                speedKmS: live.speedKmS,
-                altitudeKm: live.altKm,
-                lat: live.lat,
-                lng: live.lng
-              };
-            }
-            return prev;
-          });
+          updateLiveTelemetry(liveMap, { setObjects, setSelectedObject });
         }
       } catch {
         // Silently skip if network is transient
@@ -361,9 +346,7 @@ export default function App() {
     showToast('Synchronizing curated satellite & debris fleet with CelesTrak...', 'info');
 
     // Notify via WebSocket if open
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ action: 'fetch_live' }));
-    }
+    sendWebSocketAction(wsRef, 'fetch_live');
 
     try {
       const res = await fetch('/api/tle/fetch').then((r) => r.json());
@@ -389,9 +372,7 @@ export default function App() {
     setIsLoading(true);
     showToast('Loading deterministic conjunction demonstration scenario...', 'info');
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ action: 'load_demo' }));
-    }
+    sendWebSocketAction(wsRef, 'load_demo');
 
     try {
       const res = await fetch('/api/tle/demo', { method: 'POST' }).then((r) => r.json());
@@ -410,9 +391,7 @@ export default function App() {
     setIsLoading(true);
     showToast('Re-running SGP4 orbital propagation & pairwise analysis...', 'info');
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ action: 'reanalyze' }));
-    }
+    sendWebSocketAction(wsRef, 'reanalyze');
 
     try {
       const res = await fetch('/api/analyze', { method: 'POST' }).then((r) => r.json());
@@ -708,4 +687,3 @@ export default function App() {
     </div>
   );
 }
-
