@@ -18,6 +18,9 @@ import {
   RiskExplainer
 } from './components/RiskExplainer';
 import {
+  AIAssessment
+} from './components/AIAssessment';
+import {
   TrackedObjectsCatalog
 } from './components/TrackedObjectsCatalog';
 import {
@@ -597,6 +600,9 @@ export default function App() {
 
             {/* Explainable Risk Score Breakdown */}
             <RiskExplainer conjunction={selectedConjunction} />
+
+            {/* AI Decision Support & Burn Simulation */}
+            <AIAssessment conjunction={selectedConjunction} />
           </div>
 
         </div>

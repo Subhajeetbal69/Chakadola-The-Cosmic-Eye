@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import http from 'http';
 import path from 'path';
@@ -20,7 +21,8 @@ import {
   detectConjunctions,
   DEFAULT_CONFIG,
   getDistanceHistory,
-  calculateRiskScore
+  calculateRiskScore,
+  simulateManeuver
 } from './server/conjunctionEngine';
 import {
   createSatrec,
@@ -29,6 +31,7 @@ import {
   propagateAtTime
 } from './server/propagator';
 import { getDb, loadAllTles, saveTleRecords, setMetadata, getMetadata } from './server/db';
+import { getConjunctionAssessment } from './server/ai/aiServices';
 
 let currentTles: TleRecord[] = [];
 let currentConjunctions: ConjunctionEvent[] = [];
@@ -608,6 +611,47 @@ async function startServer() {
       conjunctionsCount: currentConjunctions.length,
       analyzedAt: lastAnalysisDate.toISOString()
     });
+  });
+
+  // POST /api/conjunctions/:id/assess - Returns structured Gemini AI assessment
+  app.post('/api/conjunctions/:id/assess', async (req, res) => {
+    const { id } = req.params;
+    const conj = currentConjunctions.find((c) => c.id === id);
+    if (!conj) {
+      return res.status(404).json({ error: 'Conjunction event not found' });
+    }
+
+    try {
+      const result = await getConjunctionAssessment(conj, currentTles);
+      res.json(result);
+    } catch (err: any) {
+      console.error('[API /conjunctions/:id/assess Error]', err);
+      res.status(500).json({ error: err?.message || 'Failed generating AI assessment' });
+    }
+  });
+
+  // POST /api/conjunctions/:id/simulate - Runs local physics-based maneuver simulation
+  app.post('/api/conjunctions/:id/simulate', (req, res) => {
+    const { id } = req.params;
+    const { burnDirection, burnMagnitudeMs, burnTimeHoursBeforeTca } = req.body;
+
+    const conj = currentConjunctions.find((c) => c.id === id);
+    if (!conj) {
+      return res.status(404).json({ error: 'Conjunction event not found' });
+    }
+
+    try {
+      const result = simulateManeuver(
+        conj,
+        currentTles,
+        burnDirection,
+        Number(burnMagnitudeMs),
+        Number(burnTimeHoursBeforeTca)
+      );
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ error: err?.message || 'Failed running maneuver simulation' });
+    }
   });
 
   // Vite middleware for development

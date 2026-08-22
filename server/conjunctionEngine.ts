@@ -463,3 +463,274 @@ export function getDistanceHistory(
     telemetryGapCount: Math.max(1, Math.round(telemetryGapCount / 6))
   };
 }
+
+const MU_EARTH = 398600.4418; // km^3 / s^2
+
+/**
+ * Robust analytical two-body Cartesian Keplerian state propagator.
+ * Propagates a state vector (r0, v0) at epoch t0 by dt seconds forward in time.
+ */
+export function propagateCartesianState(
+  r0: Vector3D,
+  v0: Vector3D,
+  dt: number
+): { position: Vector3D; velocity: Vector3D } {
+  const r = Math.sqrt(r0.x * r0.x + r0.y * r0.y + r0.z * r0.z);
+  const vSq = v0.x * v0.x + v0.y * v0.y + v0.z * v0.z;
+
+  // Specific angular momentum h = r x v
+  const hx = r0.y * v0.z - r0.z * v0.y;
+  const hy = r0.z * v0.x - r0.x * v0.z;
+  const hz = r0.x * v0.y - r0.y * v0.x;
+  const h = Math.sqrt(hx * hx + hy * hy + hz * hz);
+  
+  if (h < 1e-5) {
+    return { position: { ...r0 }, velocity: { ...v0 } };
+  }
+
+  // Inclination
+  const inc = Math.acos(Math.max(-1, Math.min(1, hz / h)));
+
+  // Node vector n = k x h = (-hy, hx, 0)
+  const nx = -hy;
+  const ny = hx;
+  const n = Math.sqrt(nx * nx + ny * ny);
+
+  // RAAN
+  let raan = 0;
+  if (n > 1e-5) {
+    raan = Math.acos(Math.max(-1, Math.min(1, nx / n)));
+    if (ny < 0) raan = 2 * Math.PI - raan;
+  }
+
+  // Eccentricity vector e = 1/mu * [ (v^2 - mu/r) r - (r . v) v ]
+  const rDotV = r0.x * v0.x + r0.y * v0.y + r0.z * v0.z;
+  const c1 = vSq - MU_EARTH / r;
+  const ex = (c1 * r0.x - rDotV * v0.x) / MU_EARTH;
+  const ey = (c1 * r0.y - rDotV * v0.y) / MU_EARTH;
+  const ez = (c1 * r0.z - rDotV * v0.z) / MU_EARTH;
+  const ecc = Math.max(1e-6, Math.sqrt(ex * ex + ey * ey + ez * ez));
+
+  // Semi-major axis
+  const energy = vSq / 2 - MU_EARTH / r;
+  let a = 0;
+  if (Math.abs(ecc - 1) > 1e-5) {
+    a = -MU_EARTH / (2 * energy);
+  } else {
+    a = 1e6; // Fallback for near-parabolic
+  }
+
+  // Argument of perigee
+  let argPer = 0;
+  if (n > 1e-5) {
+    const nDotE = nx * ex + ny * ey;
+    argPer = Math.acos(Math.max(-1, Math.min(1, nDotE / (n * ecc))));
+    if (ez < 0) argPer = 2 * Math.PI - argPer;
+  } else {
+    argPer = Math.atan2(ey, ex);
+    if (argPer < 0) argPer += 2 * Math.PI;
+  }
+
+  // True anomaly
+  const eDotR = ex * r0.x + ey * r0.y + ez * r0.z;
+  let nu = Math.acos(Math.max(-1, Math.min(1, eDotR / (ecc * r))));
+  if (rDotV < 0) nu = 2 * Math.PI - nu;
+
+  // Solve Mean Anomaly M
+  let E = 0;
+  if (ecc < 1.0) {
+    E = 2 * Math.atan(Math.sqrt((1 - ecc) / (1 + ecc)) * Math.tan(nu / 2));
+  } else {
+    E = 0;
+  }
+  let M = E - ecc * Math.sin(E);
+
+  // Propagate Mean Anomaly
+  const nMean = Math.sqrt(MU_EARTH / Math.pow(Math.abs(a), 3));
+  M = (M + nMean * dt) % (2 * Math.PI);
+  if (M < 0) M += 2 * Math.PI;
+
+  // Solve Kepler's equation for new Eccentric Anomaly E_new
+  let E_new = M;
+  for (let step = 0; step < 15; step++) {
+    const delta = (E_new - ecc * Math.sin(E_new) - M) / (1 - ecc * Math.cos(E_new));
+    E_new -= delta;
+    if (Math.abs(delta) < 1e-8) break;
+  }
+
+  // New true anomaly nu_new
+  const sinNu = (Math.sqrt(1 - ecc * ecc) * Math.sin(E_new)) / (1 - ecc * Math.cos(E_new));
+  const cosNu = (Math.cos(E_new) - ecc) / (1 - ecc * Math.cos(E_new));
+  const nu_new = Math.atan2(sinNu, cosNu);
+
+  // New radius
+  const r_new = a * (1 - ecc * Math.cos(E_new));
+
+  // Position in perifocal plane
+  const xp = r_new * Math.cos(nu_new);
+  const yp = r_new * Math.sin(nu_new);
+
+  // Velocity in perifocal plane
+  const vxp = -(Math.sqrt(MU_EARTH * a) / r_new) * Math.sin(E_new);
+  const vyp = (Math.sqrt(MU_EARTH * a * (1 - ecc * ecc)) / r_new) * Math.cos(E_new);
+
+  // Convert perifocal to ECI coordinates
+  const cosO = Math.cos(raan);
+  const sinO = Math.sin(raan);
+  const cosi = Math.cos(inc);
+  const sini = Math.sin(inc);
+  const cosw = Math.cos(argPer);
+  const sinw = Math.sin(argPer);
+
+  const Px = cosO * cosw - sinO * sinw * cosi;
+  const Py = sinO * cosw + cosO * sinw * cosi;
+  const Pz = sinw * sini;
+
+  const Qx = -cosO * sinw - sinO * cosw * cosi;
+  const Qy = -sinO * sinw + cosO * cosw * cosi;
+  const Qz = cosw * sini;
+
+  const x_new = xp * Px + yp * Qx;
+  const y_new = xp * Py + yp * Qy;
+  const z_new = xp * Pz + yp * Qz;
+
+  const vx_new = vxp * Px + vyp * Qx;
+  const vy_new = vxp * Py + vyp * Qy;
+  const vz_new = vxp * Pz + vyp * Qz;
+
+  return {
+    position: { x: x_new, y: y_new, z: z_new },
+    velocity: { x: vx_new, y: vy_new, z: vz_new }
+  };
+}
+
+export interface ManeuverSimulationResult {
+  conjunctionId: string;
+  originalMissDistanceKm: number;
+  newMissDistanceKm: number;
+  missDistanceIncreaseKm: number;
+  deltaVAppliedMs: number;
+  burnTimeHoursBeforeTca: number;
+  burnDirection: string;
+  newTcaIso: string;
+  isRiskCleared: boolean;
+}
+
+/**
+ * Simulates an impulse burn for the primary active satellite at burnTimeHoursBeforeTca.
+ * Computes closest approach sweep against the secondary target's unperturbed orbit.
+ */
+export function simulateManeuver(
+  conj: ConjunctionEvent,
+  tleRecords: TleRecord[],
+  burnDirection: 'PROGRADE' | 'RETROGRADE' | 'RADIAL' | 'INTRACK' | 'NORMAL',
+  burnMagnitudeMs: number,
+  burnTimeHoursBeforeTca: number
+): ManeuverSimulationResult {
+  const recA = tleRecords.find((t) => t.id === conj.objectA.id || t.name === conj.objectA.name);
+  const recB = tleRecords.find((t) => t.id === conj.objectB.id || t.name === conj.objectB.name);
+
+  if (!recA || !recB) {
+    throw new Error('Missing orbital TLE records for conjunction objects.');
+  }
+
+  const wA = createSatrec(recA);
+  const wB = createSatrec(recB);
+
+  const tcaDate = new Date(conj.tcaIso);
+  const burnDate = new Date(tcaDate.getTime() - burnTimeHoursBeforeTca * 3600 * 1000);
+
+  // Propagate to burn date
+  const ptA = propagateAtTime(wA, burnDate);
+
+  // Calculate local RTN (Radial, Transverse/In-track, Normal/Cross-track) unit vectors
+  const rVec = ptA.position;
+  const vVec = ptA.velocity;
+  const rMag = Math.sqrt(rVec.x * rVec.x + rVec.y * rVec.y + rVec.z * rVec.z);
+
+  // Radial: U_R = r / |r|
+  const uR = { x: rVec.x / rMag, y: rVec.y / rMag, z: rVec.z / rMag };
+
+  // Angular momentum: h = r x v
+  const hx = rVec.y * vVec.z - rVec.z * vVec.y;
+  const hy = rVec.z * vVec.x - rVec.x * vVec.z;
+  const hz = rVec.x * vVec.y - rVec.y * vVec.x;
+  const hMag = Math.sqrt(hx * hx + hy * hy + hz * hz);
+
+  // Normal: U_N = h / |h|
+  const uN = { x: hx / hMag, y: hy / hMag, z: hz / hMag };
+
+  // Transverse (In-track): U_T = U_N x U_R
+  const uT = {
+    x: uN.y * uR.z - uN.z * uR.y,
+    y: uN.z * uR.x - uN.x * uR.z,
+    z: uN.x * uR.y - uN.y * uR.x
+  };
+
+  // Delta-V from m/s to km/s
+  const dvKmS = burnMagnitudeMs / 1000;
+
+  let dvR = 0;
+  let dvT = 0;
+  let dvN = 0;
+
+  if (burnDirection === 'PROGRADE' || burnDirection === 'INTRACK') {
+    dvT = dvKmS;
+  } else if (burnDirection === 'RETROGRADE') {
+    dvT = -dvKmS;
+  } else if (burnDirection === 'RADIAL') {
+    dvR = dvKmS;
+  } else if (burnDirection === 'NORMAL') {
+    dvN = dvKmS;
+  }
+
+  // Translate to ECI Cartesian coordinates
+  const dvECI = {
+    x: dvR * uR.x + dvT * uT.x + dvN * uN.x,
+    y: dvR * uR.y + dvT * uT.y + dvN * uN.y,
+    z: dvR * uR.z + dvT * uT.z + dvN * uN.z
+  };
+
+  const vPerturbed = {
+    x: vVec.x + dvECI.x,
+    y: vVec.y + dvECI.y,
+    z: vVec.z + dvECI.z
+  };
+
+  // Sweep ±300 seconds around original TCA in 5-second steps to find true closest approach
+  let bestDist = Infinity;
+  let bestTcaDate = tcaDate;
+  const startMs = tcaDate.getTime() - 300 * 1000;
+
+  for (let s = 0; s <= 120; s++) {
+    const currentMs = startMs + s * 5 * 1000;
+    const currentDate = new Date(currentMs);
+    const dtSeconds = (currentMs - burnDate.getTime()) / 1000;
+
+    const ptAPerturbed = propagateCartesianState(rVec, vPerturbed, dtSeconds);
+    const ptBNormal = propagateAtTime(wB, currentDate);
+
+    const dist = calculateDistance(ptAPerturbed.position, ptBNormal.position);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestTcaDate = currentDate;
+    }
+  }
+
+  const originalMissDistanceKm = conj.minDistanceKm;
+  const newMissDistanceKm = Number(bestDist.toFixed(3));
+  const missDistanceIncreaseKm = Number(Math.max(0, newMissDistanceKm - originalMissDistanceKm).toFixed(3));
+  const isRiskCleared = newMissDistanceKm >= 15.0; // 15 km threshold for collision safety clearance
+
+  return {
+    conjunctionId: conj.id,
+    originalMissDistanceKm,
+    newMissDistanceKm,
+    missDistanceIncreaseKm,
+    deltaVAppliedMs: burnMagnitudeMs,
+    burnTimeHoursBeforeTca,
+    burnDirection,
+    newTcaIso: bestTcaDate.toISOString(),
+    isRiskCleared
+  };
+}
