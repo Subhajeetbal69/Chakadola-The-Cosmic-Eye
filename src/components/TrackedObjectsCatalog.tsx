@@ -16,17 +16,14 @@ export const TrackedObjectsCatalog: React.FC<TrackedObjectsCatalogProps> = ({
 
   const safeObjects = Array.isArray(objects) ? objects : [];
 
-  const q = search.trim().toLowerCase();
   const filtered = safeObjects.filter((obj) => {
     if (!obj) return false;
-    if (filterType !== 'ALL' && obj.classification !== filterType) {
-      return false;
+    if (filterType !== 'ALL' && obj.classification !== filterType) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      return (obj.name || '').toLowerCase().includes(q) || (obj.noradId || '').includes(q);
     }
-    if (!q) return true;
-    return (
-      (obj.name || '').toLowerCase().includes(q) ||
-      String(obj.noradId || '').includes(q)
-    );
+    return true;
   });
 
   const getTag = (type: ObjectClassification) => {
