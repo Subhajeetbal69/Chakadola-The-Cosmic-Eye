@@ -4,6 +4,7 @@ import http from 'http';
 import path from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
+import * as satellite from 'satellite.js';
 import {
   TleRecord,
   SystemConfig,
@@ -77,6 +78,8 @@ function getLiveTelemetryList(date: Date = new Date(), limit: number = 2000, off
     ? cachedSatrecWrappers
     : currentTles.map((r) => ({ record: r, wrapper: createSatrec(r) }));
 
+  const gmst = satellite.gstime(date);
+
   // Collect key conjunction hazard objects first
   const priorityIds = new Set<string>();
   for (const c of currentConjunctions) {
@@ -90,7 +93,7 @@ function getLiveTelemetryList(date: Date = new Date(), limit: number = 2000, off
   // Add priority conjunction objects first
   for (const item of wrappers) {
     if (priorityIds.has(item.record.id)) {
-      const summary = getObjectSummary(item.wrapper, date, true);
+      const summary = getObjectSummary(item.wrapper, date, true, gmst, false);
       result.push({
         id: summary.id,
         name: summary.name,
@@ -112,7 +115,7 @@ function getLiveTelemetryList(date: Date = new Date(), limit: number = 2000, off
   for (let i = (offset % sampleStep); i < total && result.length < limit; i += sampleStep) {
     const item = wrappers[i];
     if (!priorityIds.has(item.record.id)) {
-      const summary = getObjectSummary(item.wrapper, date, true);
+      const summary = getObjectSummary(item.wrapper, date, true, gmst, true);
       result.push({
         id: summary.id,
         name: summary.name,
@@ -137,8 +140,9 @@ function getObjectsSummaries(date: Date = new Date(), skipOrbitSample = true, li
     ? cachedSatrecWrappers
     : currentTles.map((r) => ({ record: r, wrapper: createSatrec(r) }));
 
+  const gmst = satellite.gstime(date);
   const slice = typeof limit === 'number' ? wrappers.slice(offset, offset + limit) : wrappers;
-  return slice.map((item) => getObjectSummary(item.wrapper, date, skipOrbitSample));
+  return slice.map((item) => getObjectSummary(item.wrapper, date, skipOrbitSample, gmst, true));
 }
 
 function broadcastWsMessage(data: any) {
