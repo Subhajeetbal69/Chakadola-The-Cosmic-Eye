@@ -165,7 +165,7 @@ export default function App() {
             const data: WsServerPacket = JSON.parse(event.data);
 
             if (data.type === 'telemetry_stream') {
-              // Update live coordinates and telemetry for each object in the curated fleet
+              // Update live coordinates and telemetry for streamed objects with fast Map index
               const liveMap = new Map<string, LiveTelemetryObject>();
               for (const item of data.objects) {
                 liveMap.set(item.id, item);
@@ -173,22 +173,21 @@ export default function App() {
 
               setObjects((prev) => {
                 if (prev.length === 0) return prev;
-                return prev.map((obj) => {
+                let updated = false;
+                for (const obj of prev) {
                   const live = liveMap.get(obj.id);
                   if (live) {
-                    return {
-                      ...obj,
-                      currentPosition: live.pos,
-                      positionKm: live.pos,
-                      currentVelocity: live.vel,
-                      speedKmS: live.speedKmS,
-                      altitudeKm: live.altKm,
-                      lat: live.lat,
-                      lng: live.lng
-                    };
+                    obj.currentPosition = live.pos;
+                    obj.positionKm = live.pos;
+                    obj.currentVelocity = live.vel;
+                    obj.speedKmS = live.speedKmS;
+                    obj.altitudeKm = live.altKm;
+                    obj.lat = live.lat;
+                    obj.lng = live.lng;
+                    updated = true;
                   }
-                  return obj;
-                });
+                }
+                return updated ? [...prev] : prev;
               });
 
               // Keep selected object synced
@@ -309,22 +308,21 @@ export default function App() {
 
           setObjects((prev) => {
             if (prev.length === 0) return prev;
-            return prev.map((obj) => {
+            let updated = false;
+            for (const obj of prev) {
               const live = liveMap.get(obj.id);
               if (live) {
-                return {
-                  ...obj,
-                  currentPosition: live.pos,
-                  positionKm: live.pos,
-                  currentVelocity: live.vel,
-                  speedKmS: live.speedKmS,
-                  altitudeKm: live.altKm,
-                  lat: live.lat,
-                  lng: live.lng
-                };
+                obj.currentPosition = live.pos;
+                obj.positionKm = live.pos;
+                obj.currentVelocity = live.vel;
+                obj.speedKmS = live.speedKmS;
+                obj.altitudeKm = live.altKm;
+                obj.lat = live.lat;
+                obj.lng = live.lng;
+                updated = true;
               }
-              return obj;
-            });
+            }
+            return updated ? [...prev] : prev;
           });
 
           setSelectedObject((prev) => {

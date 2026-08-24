@@ -13,6 +13,8 @@ export const TrackedObjectsCatalog: React.FC<TrackedObjectsCatalogProps> = ({
 }) => {
   const [filterType, setFilterType] = useState<string>('ALL');
   const [search, setSearch] = useState<string>('');
+  const [page, setPage] = useState<number>(1);
+  const pageSize = 50;
 
   const safeObjects = Array.isArray(objects) ? objects : [];
 
@@ -25,6 +27,21 @@ export const TrackedObjectsCatalog: React.FC<TrackedObjectsCatalogProps> = ({
     }
     return true;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const startIndex = (currentPage - 1) * pageSize;
+  const pageItems = filtered.slice(startIndex, startIndex + pageSize);
+
+  const handleFilterChange = (type: string) => {
+    setFilterType(type);
+    setPage(1);
+  };
+
+  const handleSearchChange = (val: string) => {
+    setSearch(val);
+    setPage(1);
+  };
 
   const getTag = (type: ObjectClassification) => {
     switch (type) {
@@ -59,69 +76,110 @@ export const TrackedObjectsCatalog: React.FC<TrackedObjectsCatalogProps> = ({
             <h2 className="text-xs font-bold uppercase tracking-widest text-white">Tracked Orbital Objects Catalog</h2>
           </div>
           <p className="text-[11px] text-slate-400 mt-0.5 font-medium">
-            SGP4 orbital states, Keplerian parameters, and ECI coordinates.
+            SGP4 orbital states, Keplerian parameters, and ECI coordinates across all {safeObjects.length.toLocaleString()} tracked objects.
           </p>
         </div>
 
         {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 text-xs">
+        <div className="flex items-center gap-1.5 text-xs flex-wrap">
           <button
-            onClick={() => setFilterType('ALL')}
+            onClick={() => handleFilterChange('ALL')}
             className={`px-2.5 py-1 rounded-lg font-medium text-[11px] transition-all ${
               filterType === 'ALL'
                 ? 'bg-blue-600 text-white shadow'
                 : 'bg-white/5 text-slate-400 border border-white/5 hover:bg-white/10 hover:text-white'
             }`}
           >
-            All ({safeObjects.length})
+            All ({safeObjects.length.toLocaleString()})
           </button>
           <button
-            onClick={() => setFilterType('ACTIVE_SATELLITE')}
+            onClick={() => handleFilterChange('ACTIVE_SATELLITE')}
             className={`px-2.5 py-1 rounded-lg font-medium text-[11px] transition-all ${
               filterType === 'ACTIVE_SATELLITE'
                 ? 'bg-blue-600 text-white shadow'
                 : 'bg-white/5 text-slate-400 border border-white/5 hover:bg-white/10 hover:text-white'
             }`}
           >
-            Active ({safeObjects.filter((o) => o.classification === 'ACTIVE_SATELLITE').length})
+            Active ({safeObjects.filter((o) => o.classification === 'ACTIVE_SATELLITE').length.toLocaleString()})
           </button>
           <button
-            onClick={() => setFilterType('ROCKET_BODY')}
+            onClick={() => handleFilterChange('ROCKET_BODY')}
             className={`px-2.5 py-1 rounded-lg font-medium text-[11px] transition-all ${
               filterType === 'ROCKET_BODY'
                 ? 'bg-amber-600 text-white shadow'
                 : 'bg-white/5 text-slate-400 border border-white/5 hover:bg-white/10 hover:text-white'
             }`}
           >
-            R/B ({safeObjects.filter((o) => o.classification === 'ROCKET_BODY').length})
+            R/B ({safeObjects.filter((o) => o.classification === 'ROCKET_BODY').length.toLocaleString()})
           </button>
           <button
-            onClick={() => setFilterType('DEBRIS')}
+            onClick={() => handleFilterChange('DEBRIS')}
             className={`px-2.5 py-1 rounded-lg font-medium text-[11px] transition-all ${
               filterType === 'DEBRIS'
                 ? 'bg-red-600 text-white shadow'
                 : 'bg-white/5 text-slate-400 border border-white/5 hover:bg-white/10 hover:text-white'
             }`}
           >
-            Debris ({safeObjects.filter((o) => o.classification === 'DEBRIS').length})
+            Debris ({safeObjects.filter((o) => o.classification === 'DEBRIS').length.toLocaleString()})
           </button>
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="px-4 py-2.5 bg-slate-900/60 border-b border-white/5 flex items-center justify-between text-xs backdrop-blur-md">
+      {/* Search & Pagination Bar */}
+      <div className="px-4 py-2.5 bg-slate-900/60 border-b border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs backdrop-blur-md">
         <div className="relative flex-1 max-w-xs">
           <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Search object name or NORAD ID..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-950/50 border border-white/10 text-slate-200 placeholder-slate-600 text-xs focus:outline-none focus:border-blue-500 transition-colors"
           />
         </div>
-        <div className="text-[11px] text-slate-500 font-mono font-medium">
-          Showing <span className="text-white font-bold">{filtered.length}</span> records
+
+        {/* Page Nav */}
+        <div className="flex items-center gap-2 text-[11px] font-mono">
+          <span className="text-slate-400">
+            Showing <span className="text-white font-bold">{startIndex + 1}–{Math.min(filtered.length, startIndex + pageSize)}</span> of <span className="text-white font-bold">{filtered.length.toLocaleString()}</span>
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              disabled={currentPage <= 1}
+              onClick={() => setPage(1)}
+              className="px-2 py-0.5 rounded bg-white/5 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10"
+              title="First Page"
+            >
+              &laquo;
+            </button>
+            <button
+              disabled={currentPage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-2 py-0.5 rounded bg-white/5 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10"
+              title="Previous Page"
+            >
+              &lsaquo;
+            </button>
+            <span className="px-2 py-0.5 text-blue-400 font-bold bg-blue-500/10 rounded border border-blue-500/20">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="px-2 py-0.5 rounded bg-white/5 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10"
+              title="Next Page"
+            >
+              &rsaquo;
+            </button>
+            <button
+              disabled={currentPage >= totalPages}
+              onClick={() => setPage(totalPages)}
+              className="px-2 py-0.5 rounded bg-white/5 text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10"
+              title="Last Page"
+            >
+              &raquo;
+            </button>
+          </div>
         </div>
       </div>
 
@@ -142,7 +200,7 @@ export const TrackedObjectsCatalog: React.FC<TrackedObjectsCatalogProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5 font-mono text-xs">
-            {filtered.map((obj) => {
+            {pageItems.map((obj) => {
               const speedKmS = obj.speedKmS ?? 7.68;
               const machNum = (speedKmS * 3600) / 1234.8;
               return (
@@ -152,7 +210,7 @@ export const TrackedObjectsCatalog: React.FC<TrackedObjectsCatalogProps> = ({
                   className="hover:bg-white/5 transition-colors cursor-pointer"
                 >
                   <td className="py-2.5 px-4 font-bold text-slate-400">
-                    #{obj.noradId}
+                    #{obj.noradId || obj.id}
                   </td>
                   <td className="py-2.5 px-3">
                     <div className="font-semibold text-white font-sans truncate max-w-[180px]">{obj.name}</div>

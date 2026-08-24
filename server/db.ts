@@ -32,7 +32,7 @@ export async function getDb(): Promise<Database> {
     console.log('[DB] Initialized fresh in-memory SQLite database.');
   }
 
-  // Create tables
+  // Create tables & indices
   dbInstance.run(`
     CREATE TABLE IF NOT EXISTS tles (
       id TEXT PRIMARY KEY,
@@ -44,6 +44,9 @@ export async function getDb(): Promise<Database> {
       data_json TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE INDEX IF NOT EXISTS idx_tles_classification ON tles (classification);
+    CREATE INDEX IF NOT EXISTS idx_tles_name ON tles (name);
 
     CREATE TABLE IF NOT EXISTS conjunctions (
       id TEXT PRIMARY KEY,
@@ -84,34 +87,42 @@ export function saveDb(): void {
 
 export async function saveTleRecords(records: TleRecord[]): Promise<void> {
   const db = await getDb();
-  db.run('DELETE FROM tles');
-  const stmt = db.prepare(`
-    INSERT OR REPLACE INTO tles (id, name, line1, line2, classification, source, data_json, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+  
+  db.run('BEGIN TRANSACTION;');
+  try {
+    db.run('DELETE FROM tles');
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO tles (id, name, line1, line2, classification, source, data_json, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
 
-  for (const r of records) {
-    stmt.run([
-      r.id,
-      r.name,
-      r.line1,
-      r.line2,
-      r.classification,
-      r.source,
-      JSON.stringify(r),
-      r.updatedAt
-    ]);
+    for (const r of records) {
+      stmt.run([
+        r.id,
+        r.name,
+        r.line1,
+        r.line2,
+        r.classification,
+        r.source,
+        JSON.stringify(r),
+        r.updatedAt
+      ]);
+    }
+    stmt.free();
+    db.run('COMMIT;');
+  } catch (err) {
+    db.run('ROLLBACK;');
+    throw err;
   }
-  stmt.free();
 
-  setMetadata('last_tle_update', new Date().toISOString());
-  setMetadata('tracked_count', records.length.toString());
+  await setMetadata('last_tle_update', new Date().toISOString());
+  await setMetadata('tracked_count', records.length.toString());
   saveDb();
 }
 
 export async function loadAllTles(): Promise<TleRecord[]> {
   const db = await getDb();
-  const res = db.exec('SELECT data_json FROM tles ORDER BY name ASC');
+  const res = db.exec('SELECT data_json FROM tles ORDER BY rowid ASC');
   if (!res || res.length === 0 || !res[0].values) {
     return [];
   }
@@ -138,3 +149,4 @@ export async function getMetadata(key: string, defaultValue: string = ''): Promi
   stmt.free();
   return val;
 }
+

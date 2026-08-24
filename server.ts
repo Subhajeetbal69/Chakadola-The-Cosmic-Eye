@@ -40,6 +40,16 @@ let activeSource = 'Curated Reference Fleet (Offline)';
 let lastAnalysisDate: Date = new Date();
 let wss: WebSocketServer | null = null;
 
+// In-memory cache of satrec wrappers for instant propagation
+let cachedSatrecWrappers: Array<{ record: TleRecord; wrapper: any }> = [];
+
+function refreshSatrecCache() {
+  cachedSatrecWrappers = currentTles.map((r) => ({
+    record: r,
+    wrapper: createSatrec(r)
+  }));
+}
+
 function getSystemStatus(): SystemStatus {
   const activeSats = currentTles.filter((t) => t.classification === 'ACTIVE_SATELLITE').length;
   const debris = currentTles.filter((t) => t.classification === 'DEBRIS').length;
@@ -62,37 +72,85 @@ function getSystemStatus(): SystemStatus {
   };
 }
 
-function getLiveTelemetryList(date: Date = new Date()): LiveTelemetryObject[] {
-  const wrappers = currentTles.map((r) => createSatrec(r)).filter((w) => w.isValid);
-  return wrappers.map((w) => {
-    const summary = getObjectSummary(w, date, true);
-    return {
-      id: summary.id,
-      name: summary.name,
-      classification: summary.classification,
-      noradId: summary.noradId,
-      pos: summary.currentPosition,
-      vel: summary.currentVelocity,
-      speedKmS: summary.speedKmS,
-      altKm: summary.altitudeKm,
-      lat: summary.lat,
-      lng: summary.lng,
-      epochTimestamp: date.getTime()
-    };
-  });
+function getLiveTelemetryList(date: Date = new Date(), limit: number = 2000, offset: number = 0): LiveTelemetryObject[] {
+  const wrappers = cachedSatrecWrappers.length === currentTles.length
+    ? cachedSatrecWrappers
+    : currentTles.map((r) => ({ record: r, wrapper: createSatrec(r) }));
+
+  // Collect key conjunction hazard objects first
+  const priorityIds = new Set<string>();
+  for (const c of currentConjunctions) {
+    if (c.objectA) priorityIds.add(c.objectA.id);
+    if (c.objectB) priorityIds.add(c.objectB.id);
+  }
+
+  const result: LiveTelemetryObject[] = [];
+  const total = wrappers.length;
+
+  // Add priority conjunction objects first
+  for (const item of wrappers) {
+    if (priorityIds.has(item.record.id)) {
+      const summary = getObjectSummary(item.wrapper, date, true);
+      result.push({
+        id: summary.id,
+        name: summary.name,
+        classification: summary.classification,
+        noradId: summary.noradId,
+        pos: summary.currentPosition,
+        vel: summary.currentVelocity,
+        speedKmS: summary.speedKmS,
+        altKm: summary.altitudeKm,
+        lat: summary.lat,
+        lng: summary.lng,
+        epochTimestamp: date.getTime()
+      });
+    }
+  }
+
+  // Add rotating batch of background fleet to keep streaming lightweight & high-speed
+  const sampleStep = Math.max(1, Math.floor(total / limit));
+  for (let i = (offset % sampleStep); i < total && result.length < limit; i += sampleStep) {
+    const item = wrappers[i];
+    if (!priorityIds.has(item.record.id)) {
+      const summary = getObjectSummary(item.wrapper, date, true);
+      result.push({
+        id: summary.id,
+        name: summary.name,
+        classification: summary.classification,
+        noradId: summary.noradId,
+        pos: summary.currentPosition,
+        vel: summary.currentVelocity,
+        speedKmS: summary.speedKmS,
+        altKm: summary.altitudeKm,
+        lat: summary.lat,
+        lng: summary.lng,
+        epochTimestamp: date.getTime()
+      });
+    }
+  }
+
+  return result;
 }
 
-function getObjectsSummaries(date: Date = new Date()): TrackedObjectSummary[] {
-  const wrappers = currentTles.map((r) => createSatrec(r)).filter((w) => w.isValid);
-  return wrappers.map((w) => getObjectSummary(w, date));
+function getObjectsSummaries(date: Date = new Date(), skipOrbitSample = true, limit?: number, offset: number = 0): TrackedObjectSummary[] {
+  const wrappers = cachedSatrecWrappers.length === currentTles.length
+    ? cachedSatrecWrappers
+    : currentTles.map((r) => ({ record: r, wrapper: createSatrec(r) }));
+
+  const slice = typeof limit === 'number' ? wrappers.slice(offset, offset + limit) : wrappers;
+  return slice.map((item) => getObjectSummary(item.wrapper, date, skipOrbitSample));
 }
 
 function broadcastWsMessage(data: any) {
   if (!wss) return;
   const payload = JSON.stringify(data);
   for (const client of wss.clients) {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(payload);
+    if (client.readyState === WebSocket.OPEN && client.bufferedAmount < 1024 * 1024) {
+      try {
+        client.send(payload);
+      } catch (err) {
+        console.error('[WebSocket] Broadcast error:', err);
+      }
     }
   }
 }
@@ -102,19 +160,24 @@ async function initCoreEngine() {
   const baseMasterRecords = loadSampleTleDataset();
   const dbRecords = await loadAllTles();
   
-  if (dbRecords.length === baseMasterRecords.length && baseMasterRecords.length > 0) {
+  if (dbRecords.length >= 1000) {
     currentTles = dbRecords;
-    activeSource = await getMetadata('active_source', 'Curated Reference Fleet (Offline)');
-  } else {
+    activeSource = await getMetadata('active_source', 'Catalog Telemetry (Live Astrodynamics Propagation)');
+  } else if (baseMasterRecords.length > 0) {
     currentTles = baseMasterRecords;
     await saveTleRecords(currentTles);
+    activeSource = 'Catalog Telemetry (Live Astrodynamics Propagation)';
+  } else {
+    currentTles = baseMasterRecords;
     activeSource = 'Curated Reference Fleet (Offline)';
   }
+
+  refreshSatrecCache();
 
   // Run initial conjunction detection
   lastAnalysisDate = new Date();
   currentConjunctions = detectConjunctions(currentTles, activeConfig, lastAnalysisDate);
-  console.log(`[Core Engine] Initialized with ${currentTles.length} objects and ${currentConjunctions.length} conjunctions.`);
+  console.log(`[Core Engine] Initialized with ${currentTles.length} space objects and ${currentConjunctions.length} conjunction alerts.`);
 }
 
 async function startServer() {
@@ -129,7 +192,7 @@ async function startServer() {
   // Create HTTP server for both Express and WebSockets
   const server = http.createServer(app);
 
-  // Initialize WebSocket Server with explicit upgrade routing to avoid Vite HMR conflicts
+  // Initialize WebSocket Server with explicit upgrade routing
   wss = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', (request, socket, head) => {
@@ -152,7 +215,7 @@ async function startServer() {
     const initialState = {
       type: 'initial_state',
       status: getSystemStatus(),
-      objects: getObjectsSummaries(new Date()),
+      objects: getObjectsSummaries(new Date(), true),
       conjunctions: currentConjunctions,
       timestamp: Date.now()
     };
@@ -176,13 +239,14 @@ async function startServer() {
           const result = await fetchLiveTleData();
           currentTles = result.records;
           activeSource = result.source;
+          refreshSatrecCache();
           lastAnalysisDate = new Date();
           currentConjunctions = detectConjunctions(currentTles, activeConfig, lastAnalysisDate);
 
           broadcastWsMessage({
             type: 'conjunction_update',
             status: getSystemStatus(),
-            objects: getObjectsSummaries(lastAnalysisDate),
+            objects: getObjectsSummaries(lastAnalysisDate, true),
             conjunctions: currentConjunctions,
             timestamp: Date.now()
           });
@@ -193,6 +257,7 @@ async function startServer() {
           const demoRecords = createDeterministicDemoScenario();
           currentTles = demoRecords;
           activeSource = 'Deterministic Demo Conjunction Scenario';
+          refreshSatrecCache();
           await saveTleRecords(currentTles);
           await setMetadata('active_source', activeSource);
 
@@ -202,7 +267,7 @@ async function startServer() {
           broadcastWsMessage({
             type: 'conjunction_update',
             status: getSystemStatus(),
-            objects: getObjectsSummaries(lastAnalysisDate),
+            objects: getObjectsSummaries(lastAnalysisDate, true),
             conjunctions: currentConjunctions,
             timestamp: Date.now()
           });
@@ -216,7 +281,7 @@ async function startServer() {
           broadcastWsMessage({
             type: 'conjunction_update',
             status: getSystemStatus(),
-            objects: getObjectsSummaries(lastAnalysisDate),
+            objects: getObjectsSummaries(lastAnalysisDate, true),
             conjunctions: currentConjunctions,
             timestamp: Date.now()
           });
@@ -238,10 +303,12 @@ async function startServer() {
   });
 
   // Continuous High-Frequency Telemetry Stream Broadcast Loop (Every 500ms)
+  let streamOffset = 0;
   setInterval(() => {
     if (!wss || wss.clients.size === 0) return;
     const now = new Date();
-    const telemetryList = getLiveTelemetryList(now);
+    streamOffset = (streamOffset + 1) % 100;
+    const telemetryList = getLiveTelemetryList(now, 2000, streamOffset);
 
     broadcastWsMessage({
       type: 'telemetry_stream',
@@ -256,6 +323,7 @@ async function startServer() {
     res.json({
       status: 'ok',
       wsClients: wss?.clients.size || 0,
+      trackedCount: currentTles.length,
       timestamp: new Date().toISOString()
     });
   });
@@ -267,7 +335,8 @@ async function startServer() {
   app.get('/api/telemetry/live', (req, res) => {
     const timeMs = Number(req.query.timestamp) || Date.now();
     const date = new Date(timeMs);
-    const telemetry = getLiveTelemetryList(date);
+    const limit = Number(req.query.limit) || 2000;
+    const telemetry = getLiveTelemetryList(date, limit);
     res.json({
       timestamp: date.toISOString(),
       epochMs: date.getTime(),
@@ -281,6 +350,7 @@ async function startServer() {
       const result = await fetchLiveTleData();
       currentTles = result.records;
       activeSource = result.source;
+      refreshSatrecCache();
       lastAnalysisDate = new Date();
       currentConjunctions = detectConjunctions(currentTles, activeConfig, lastAnalysisDate);
 
@@ -288,7 +358,7 @@ async function startServer() {
       broadcastWsMessage({
         type: 'conjunction_update',
         status: getSystemStatus(),
-        objects: getObjectsSummaries(lastAnalysisDate),
+        objects: getObjectsSummaries(lastAnalysisDate, true),
         conjunctions: currentConjunctions,
         timestamp: Date.now()
       });
@@ -311,6 +381,7 @@ async function startServer() {
       const demoRecords = createDeterministicDemoScenario();
       currentTles = demoRecords;
       activeSource = 'Deterministic Demo Conjunction Scenario';
+      refreshSatrecCache();
       await saveTleRecords(currentTles);
       await setMetadata('active_source', activeSource);
 
@@ -320,7 +391,7 @@ async function startServer() {
       broadcastWsMessage({
         type: 'conjunction_update',
         status: getSystemStatus(),
-        objects: getObjectsSummaries(lastAnalysisDate),
+        objects: getObjectsSummaries(lastAnalysisDate, true),
         conjunctions: currentConjunctions,
         timestamp: Date.now()
       });
@@ -337,8 +408,40 @@ async function startServer() {
   });
 
   app.get('/api/objects', (req, res) => {
+    const { page, limit, search, type } = req.query;
     const now = new Date();
-    res.json(getObjectsSummaries(now));
+
+    if (page || limit || search || type) {
+      let filtered = currentTles;
+      if (type && typeof type === 'string' && type !== 'ALL') {
+        filtered = filtered.filter((t) => t.classification === type);
+      }
+      if (search && typeof search === 'string' && search.trim()) {
+        const q = search.toLowerCase();
+        filtered = filtered.filter((t) => t.name.toLowerCase().includes(q) || t.id.includes(q));
+      }
+
+      const p = Math.max(1, Number(page) || 1);
+      const l = Math.min(500, Math.max(1, Number(limit) || 50));
+      const total = filtered.length;
+      const offset = (p - 1) * l;
+      const pageRecords = filtered.slice(offset, offset + l);
+
+      const pageSummaries = pageRecords.map((r) => {
+        const wrapper = createSatrec(r);
+        return getObjectSummary(wrapper, now, true);
+      });
+
+      return res.json({
+        total,
+        page: p,
+        limit: l,
+        totalPages: Math.ceil(total / l),
+        objects: pageSummaries
+      });
+    }
+
+    res.json(getObjectsSummaries(now, true));
   });
 
   app.get('/api/objects/:id/trajectory', (req, res) => {

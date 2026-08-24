@@ -93,6 +93,9 @@ export const Orbit3DView: React.FC<Orbit3DViewProps> = React.memo(({
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
   const ambientLightRef = useRef<THREE.AmbientLight | null>(null);
   const objectsGroupRef = useRef<THREE.Group | null>(null);
+  const pointsMeshRef = useRef<THREE.Points | null>(null);
+  const pointsPosArrayRef = useRef<Float32Array | null>(null);
+  const pointsObjListRef = useRef<TrackedObjectSummary[]>([]);
   const hazardGroupRef = useRef<THREE.Group | null>(null);
   const selectionIndicatorGroupRef = useRef<THREE.Group | null>(null);
   const earthMeshRef = useRef<THREE.Mesh | null>(null);
@@ -898,7 +901,21 @@ export const Orbit3DView: React.FC<Orbit3DViewProps> = React.memo(({
         }
       }
 
-      // Update positions of objects smoothly (No blinking, steady rendering)
+      // Update point cloud positions if points constellation is active
+      const pointsMesh = pointsMeshRef.current;
+      const pointsPosArray = pointsPosArrayRef.current;
+      const pointsObjList = pointsObjListRef.current;
+      if (pointsMesh && pointsPosArray && pointsObjList.length > 0) {
+        for (let i = 0; i < pointsObjList.length; i++) {
+          const p = getObjectInterpolatedPosition(pointsObjList[i], currentSimSeconds);
+          pointsPosArray[i * 3] = p.x;
+          pointsPosArray[i * 3 + 1] = p.y;
+          pointsPosArray[i * 3 + 2] = p.z;
+        }
+        pointsMesh.geometry.attributes.position.needsUpdate = true;
+      }
+
+      // Update positions of interactive objects smoothly (No blinking, steady rendering)
       objectNodesMapRef.current.forEach((val) => {
         const newPos = getObjectInterpolatedPosition(val.objData, currentSimSeconds);
         val.mesh.position.copy(newPos);
@@ -987,93 +1004,151 @@ export const Orbit3DView: React.FC<Orbit3DViewProps> = React.memo(({
       hazardGroup.remove(hazardGroup.children[0]);
     }
     objectNodesMapRef.current.clear();
+    pointsMeshRef.current = null;
+    pointsPosArrayRef.current = null;
+    pointsObjListRef.current = [];
 
     const safeObjects = Array.isArray(objects) ? objects : [];
+    if (safeObjects.length === 0) return;
 
-    // Shared Materials for Performance & Clean Matte Rendering
+    // Filter objects according to active view filter
+    const visibleObjects = safeObjects.filter((obj) => {
+      if (!obj) return false;
+      const isDebris = obj.classification === 'DEBRIS';
+      const isRocketBody = obj.classification === 'ROCKET_BODY';
+      const isActiveSat = obj.classification === 'ACTIVE_SATELLITE';
+      const isConjunctionPair =
+        selectedConjunction &&
+        (selectedConjunction.objectA?.id === obj.id || selectedConjunction.objectB?.id === obj.id);
+
+      if (filterMode === 'DEBRIS_ONLY' && !isDebris) return false;
+      if (filterMode === 'ACTIVE_ONLY' && !isActiveSat) return false;
+      if (filterMode === 'HAZARDS_ONLY' && !isConjunctionPair) return false;
+      return true;
+    });
+
+    // 1. Point Cloud for Scalable 16,063 Object Constellation
+    const numPoints = visibleObjects.length;
+    const positions = new Float32Array(numPoints * 3);
+    const colors = new Float32Array(numPoints * 3);
+
+    for (let i = 0; i < numPoints; i++) {
+      const obj = visibleObjects[i];
+      const pos = getObjectInterpolatedPosition(obj, simSecondsRef.current);
+      positions[i * 3] = pos.x;
+      positions[i * 3 + 1] = pos.y;
+      positions[i * 3 + 2] = pos.z;
+
+      if (obj.classification === 'DEBRIS') {
+        colors[i * 3] = 0.95;
+        colors[i * 3 + 1] = 0.95;
+        colors[i * 3 + 2] = 0.98;
+      } else if (obj.classification === 'ROCKET_BODY') {
+        colors[i * 3] = 0.96;
+        colors[i * 3 + 1] = 0.62;
+        colors[i * 3 + 2] = 0.04;
+      } else {
+        // ACTIVE_SATELLITE
+        colors[i * 3] = 0.22;
+        colors[i * 3 + 1] = 0.74;
+        colors[i * 3 + 2] = 0.97;
+      }
+    }
+
+    const pointsGeo = new THREE.BufferGeometry();
+    pointsGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    pointsGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const pointsMat = new THREE.PointsMaterial({
+      size: 0.22,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.85,
+      sizeAttenuation: true
+    });
+
+    const pointsMesh = new THREE.Points(pointsGeo, pointsMat);
+    objectsGroup.add(pointsMesh);
+
+    pointsMeshRef.current = pointsMesh;
+    pointsPosArrayRef.current = positions;
+    pointsObjListRef.current = visibleObjects;
+
+    // 2. High-Tech 3D Detailed Geometric Meshes for Featured & Interactive Objects
     const debrisMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       roughness: 0.75,
       metalness: 0.15
     });
-
     const satBusMat = new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
       roughness: 0.5,
       metalness: 0.4
     });
-
     const satWingMat = new THREE.MeshStandardMaterial({
       color: 0x1e3a8a,
       roughness: 0.6,
       metalness: 0.3
     });
-
     const rocketMat = new THREE.MeshStandardMaterial({
       color: 0xf59e0b,
       roughness: 0.5,
       metalness: 0.35
     });
 
-    safeObjects.forEach((obj) => {
-      if (!obj) return;
+    // Determine featured objects (selected object, conjunction threat pair, + top 60 active stations/debris)
+    const featuredSet = new Set<string>();
+    if (caughtObject) featuredSet.add(caughtObject.id);
+    if (selectedConjunction) {
+      if (selectedConjunction.objectA) featuredSet.add(selectedConjunction.objectA.id);
+      if (selectedConjunction.objectB) featuredSet.add(selectedConjunction.objectB.id);
+    }
+    for (let k = 0; k < Math.min(visibleObjects.length, 60); k++) {
+      featuredSet.add(visibleObjects[k].id);
+    }
+
+    visibleObjects.forEach((obj) => {
+      if (!featuredSet.has(obj.id)) return;
 
       const isDebris = obj.classification === 'DEBRIS';
       const isRocketBody = obj.classification === 'ROCKET_BODY';
-      const isActiveSat = obj.classification === 'ACTIVE_SATELLITE';
 
-      const isConjunctionPair =
-        selectedConjunction &&
-        (selectedConjunction.objectA?.id === obj.id || selectedConjunction.objectB?.id === obj.id);
+      let mainColor = 0x38bdf8;
+      if (isDebris) mainColor = 0xe2e8f0;
+      else if (isRocketBody) mainColor = 0xf59e0b;
 
-      // Filter Visibility
-      let isVisible = true;
-      if (filterMode === 'DEBRIS_ONLY' && !isDebris) isVisible = false;
-      if (filterMode === 'ACTIVE_ONLY' && !isActiveSat) isVisible = false;
-      if (filterMode === 'HAZARDS_ONLY' && !isConjunctionPair) isVisible = false;
-
-      let mainColor = 0x38bdf8; // Dimmer Cyan / Blue
-      if (isDebris) mainColor = 0xe2e8f0; // Clean Off-White
-      else if (isRocketBody) mainColor = 0xf59e0b; // Amber
-
-      // 1. Clean, subtle orbit lines
-      if (showOrbitLines) {
+      // Orbit lines for featured / selected objects
+      if (showOrbitLines && (featuredSet.has(obj.id) || obj.id === caughtObject?.id)) {
         const pathPoints = getSafeOrbitPoints(obj);
         if (pathPoints.length >= 3) {
           const orbitGeo = new THREE.BufferGeometry().setFromPoints(pathPoints);
           const orbitMat = new THREE.LineBasicMaterial({
             color: mainColor,
             transparent: true,
-            opacity: !isVisible ? 0.02 : isDebris ? 0.25 : 0.35,
+            opacity: isDebris ? 0.3 : 0.45,
             linewidth: 1
           });
           const orbitLine = new THREE.Line(orbitGeo, orbitMat);
-          orbitLine.visible = isVisible || !['DEBRIS_ONLY', 'ACTIVE_ONLY', 'HAZARDS_ONLY'].includes(filterMode);
           objectsGroup.add(orbitLine);
         }
       }
 
-      // 2. High-Tech 3D Geometric Object Group
+      // Detailed 3D Mesh
       const nodeGroup = new THREE.Group();
-
       if (isDebris) {
-        // Small matte white sphere
-        const sphereGeo = new THREE.SphereGeometry(0.11, 10, 10);
+        const sphereGeo = new THREE.SphereGeometry(0.12, 10, 10);
         const sphereMesh = new THREE.Mesh(sphereGeo, debrisMat);
         nodeGroup.add(sphereMesh);
       } else if (isRocketBody) {
-        // Small cylindrical booster
         const boosterGeo = new THREE.CylinderGeometry(0.09, 0.11, 0.42, 10);
         const boosterMesh = new THREE.Mesh(boosterGeo, rocketMat);
         boosterMesh.rotation.z = Math.PI / 2;
         nodeGroup.add(boosterMesh);
       } else {
-        // Active Satellite: Sleek compact bus + solar wings
         const busGeo = new THREE.BoxGeometry(0.16, 0.16, 0.2);
         const busMesh = new THREE.Mesh(busGeo, satBusMat);
         nodeGroup.add(busMesh);
 
-        // Wings
         const wingGeo = new THREE.BoxGeometry(0.48, 0.14, 0.02);
         const leftWing = new THREE.Mesh(wingGeo, satWingMat);
         leftWing.position.set(-0.34, 0, 0);
@@ -1084,11 +1159,10 @@ export const Orbit3DView: React.FC<Orbit3DViewProps> = React.memo(({
         nodeGroup.add(rightWing);
       }
 
-      // Initial Position
       const initialPos = getObjectInterpolatedPosition(obj, simSecondsRef.current);
       nodeGroup.position.copy(initialPos);
 
-      // 3. Wide Raycasting Hit Box (Effortless clicking)
+      // Wide Raycasting Hit Box (Effortless clicking)
       const hitBoxGeo = new THREE.SphereGeometry(1.6, 8, 8);
       const hitBoxMat = new THREE.MeshBasicMaterial({
         visible: false,
@@ -1100,16 +1174,14 @@ export const Orbit3DView: React.FC<Orbit3DViewProps> = React.memo(({
         isInteractiveObject: true,
         objectData: obj
       };
-      hitBoxMesh.visible = isVisible;
 
-      nodeGroup.visible = isVisible;
       objectsGroup.add(nodeGroup);
       objectsGroup.add(hitBoxMesh);
 
       objectNodesMapRef.current.set(obj.id, { mesh: nodeGroup, hitBox: hitBoxMesh, objData: obj });
     });
 
-    // 4. Conjunction Hazard Laser Line
+    // 3. Conjunction Hazard Laser Line
     if (selectedConjunction) {
       const objA = safeObjects.find((o) => o.id === selectedConjunction.objectA?.id);
       const objB = safeObjects.find((o) => o.id === selectedConjunction.objectB?.id);
@@ -1158,6 +1230,7 @@ export const Orbit3DView: React.FC<Orbit3DViewProps> = React.memo(({
   }, [
     objects,
     selectedConjunction,
+    caughtObject,
     filterMode,
     showOrbitLines,
     showClouds,
