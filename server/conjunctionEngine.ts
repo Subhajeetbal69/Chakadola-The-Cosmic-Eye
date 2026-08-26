@@ -249,8 +249,8 @@ export function detectConjunctions(
           const timeToEventHours = Math.max(0, (refined.tcaDate.getTime() - startDate.getTime()) / (1000 * 3600));
           const breakdown = calculateRiskScore(refined.minDistance, refined.relVel, timeToEventHours, config);
 
-          const summaryA = getObjectSummary(wA, startDate);
-          const summaryB = getObjectSummary(wB, startDate);
+          const summaryA = getObjectSummary(wA, startDate, true);
+          const summaryB = getObjectSummary(wB, startDate, true);
 
           events.push({
             id: `CONJ-${wA.record.id}-${wB.record.id}`,
@@ -296,8 +296,8 @@ export function detectConjunctions(
       const relVel = Math.max(7.2, calculateRelativeVelocity(ptA.velocity, ptB.velocity));
 
       const breakdown = calculateRiskScore(missKm, relVel, offsetH, config);
-      const summaryA = getObjectSummary(wA, startDate);
-      const summaryB = getObjectSummary(wB, startDate);
+      const summaryA = getObjectSummary(wA, startDate, true);
+      const summaryB = getObjectSummary(wB, startDate, true);
 
       events.push({
         id: `CONJ-${wA.record.id}-${wB.record.id}`,

@@ -65,7 +65,7 @@ function getSystemStatus(): SystemStatus {
 function getLiveTelemetryList(date: Date = new Date()): LiveTelemetryObject[] {
   const wrappers = currentTles.map((r) => createSatrec(r)).filter((w) => w.isValid);
   return wrappers.map((w) => {
-    const summary = getObjectSummary(w, date);
+    const summary = getObjectSummary(w, date, true);
     return {
       id: summary.id,
       name: summary.name,

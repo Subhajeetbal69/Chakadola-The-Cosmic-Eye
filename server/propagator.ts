@@ -39,7 +39,7 @@ function solveKepler(M: number, e: number): number {
   for (let i = 0; i < 15; i++) {
     const delta = (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
     E -= delta;
-    if (Math.abs(delta) < 1e-7) break;
+    if (Math.abs(delta) < 1e-8) break;
   }
   return E;
 }
@@ -159,15 +159,18 @@ export function propagateAtTime(wrapper: SatrecWrapper, date: Date): TrajectoryP
 
       if (
         position &&
-        !isNaN(position.x) &&
-        !isNaN(position.y) &&
-        !isNaN(position.z) &&
-        (position.x !== 0 || position.y !== 0 || position.z !== 0)
+        Number.isFinite(position.x) &&
+        Number.isFinite(position.y) &&
+        Number.isFinite(position.z) &&
+        Number.isFinite(velocity.x) &&
+        Number.isFinite(velocity.y) &&
+        Number.isFinite(velocity.z) &&
+        position.x !== 0 && position.y !== 0 && position.z !== 0
       ) {
         const gmst = satellite.gstime(date);
-        let lat = 0;
-        let lng = 0;
-        let alt = 0;
+        let lat = null;
+        let lng = null;
+        let alt = null;
 
         try {
           const geodetic = satellite.eciToGeodetic(position, gmst);
@@ -204,7 +207,7 @@ export function propagateAtTime(wrapper: SatrecWrapper, date: Date): TrajectoryP
         };
       }
     } catch (err) {
-      // Fallback below
+      console.warn("SGP4 propagation failed:", err);
     }
   }
 
@@ -221,38 +224,65 @@ export function generateTrajectory(
   hours: number = 24,
   stepSeconds: number = 60
 ): TrajectoryPoint[] {
-  const points: TrajectoryPoint[] = [];
   const totalSteps = Math.floor((hours * 3600) / stepSeconds);
-  const startMs = startDate.getTime();
+  const stepMs = stepSeconds * 1000;
+  const points = new Array<TrajectoryPoint>(totalSteps + 1);
+  let currentMs = startDate.getTime();
 
   for (let i = 0; i <= totalSteps; i++) {
-    const currentMs = startMs + i * stepSeconds * 1000;
-    const date = new Date(currentMs);
-    const pt = propagateAtTime(wrapper, date);
-    points.push(pt);
+    points[i] = propagateAtTime(wrapper, new Date(currentMs));
+    currentMs += stepMs;
   }
 
   return points;
 }
 
+// Simple orbit sample cache to avoid recalculating 48-point trajectory on every summary call
+const orbitSampleCache = new Map<string, { updatedAt: string; timestamp: number; sample: Vector3D[] }>();
+
 /**
  * Gets summary and guaranteed 48-point orbital loop samples for a tracked object
  */
-export function getObjectSummary(wrapper: SatrecWrapper, date: Date = new Date()): TrackedObjectSummary {
+export function getObjectSummary(
+  wrapper: SatrecWrapper,
+  date: Date = new Date(),
+  skipOrbitSample = false
+): TrackedObjectSummary {
   const r = wrapper.record;
   const current = propagateAtTime(wrapper, date);
 
   // Generate 48 samples around 1 orbital period to render high-fidelity 3D and 2D orbit tracks
   const orbitSample: Vector3D[] = [];
-  const periodMin = Math.max(80, r.periodMin || 92);
-  const periodSeconds = periodMin * 60;
-  const stepSeconds = periodSeconds / 48;
-  const startMs = date.getTime();
+  
+  if (!skipOrbitSample) {
+    const startMs = date.getTime();
+    const cacheKey = r.id;
+    const cached = orbitSampleCache.get(cacheKey);
 
-  for (let i = 0; i < 48; i++) {
-    const pt = propagateAtTime(wrapper, new Date(startMs + i * stepSeconds * 1000));
-    if (pt && pt.position) {
-      orbitSample.push(pt.position);
+    // Reuse cache if it matches the updatedAt TLE timestamp and is within 5 minutes of target time
+    if (cached && cached.updatedAt === r.updatedAt && Math.abs(cached.timestamp - startMs) < 300000) {
+      orbitSample.push(...cached.sample);
+    } else {
+      const periodMin = Math.max(80, r.periodMin || 92);
+      const periodSeconds = periodMin * 60;
+      const stepSeconds = periodSeconds / 48;
+
+      // Reuse a single Date object to avoid 48 object allocations per satellite summary
+      const sampleDate = new Date();
+      for (let i = 0; i < 48; i++) {
+        sampleDate.setTime(startMs + i * stepSeconds * 1000);
+        const pt = propagateAtTime(wrapper, sampleDate);
+        if (pt && pt.position) {
+          orbitSample.push(pt.position);
+        }
+      }
+
+      // Store generated sample in cache
+      orbitSampleCache.set(cacheKey, {
+        updatedAt: r.updatedAt,
+        timestamp: startMs,
+        sample: [...orbitSample]
+      });
     }
   }
 
