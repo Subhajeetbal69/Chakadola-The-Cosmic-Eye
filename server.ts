@@ -196,6 +196,15 @@ async function startServer() {
   // Create HTTP server for both Express and WebSockets
   const server = http.createServer(app);
 
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\n[Server Error] Port ${PORT} is already in use by another process.`);
+      console.error(`Please terminate any background Node/TSX servers running on port ${PORT} before running npm run dev.\n`);
+    } else {
+      console.error('[Server Error]', err);
+    }
+  });
+
   // Initialize WebSocket Server with explicit upgrade routing
   wss = new WebSocketServer({ noServer: true });
 

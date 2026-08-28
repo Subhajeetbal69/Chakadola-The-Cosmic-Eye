@@ -143,7 +143,10 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         wsRef.current = ws;
 
         ws.onopen = () => {
-          if (isUnmounted) return;
+          if (isUnmounted) {
+            ws.close();
+            return;
+          }
           setIsWsConnected(true);
           reconnectDelay = 2000;
           console.log('[WebSocket Client] Connected to continuous astrodynamics feed.');
@@ -223,20 +226,18 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           if (isUnmounted) return;
           setIsWsConnected(false);
           setWsLatency(null);
-          reconnectDelay = Math.min(reconnectDelay * 1.5, 12000);
+          reconnectDelay = Math.min(reconnectDelay * 1.5, 8000);
           reconnectTimeoutRef.current = setTimeout(connectWs, reconnectDelay);
         };
 
         ws.onerror = () => {
-          try {
-            ws.close();
-          } catch {
-            // ignore
-          }
+          // Handled via onclose
         };
       } catch (err) {
-        reconnectDelay = Math.min(reconnectDelay * 1.5, 12000);
-        reconnectTimeoutRef.current = setTimeout(connectWs, reconnectDelay);
+        if (!isUnmounted) {
+          reconnectDelay = Math.min(reconnectDelay * 1.5, 8000);
+          reconnectTimeoutRef.current = setTimeout(connectWs, reconnectDelay);
+        }
       }
     }
 
@@ -254,10 +255,11 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       clearInterval(pingInterval);
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) {
-        try {
+        if (wsRef.current.readyState === WebSocket.OPEN) {
           wsRef.current.close();
-        } catch {
-          // ignore
+        } else if (wsRef.current.readyState === WebSocket.CONNECTING) {
+          const socket = wsRef.current;
+          socket.onopen = () => socket.close();
         }
       }
     };
