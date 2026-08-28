@@ -115,7 +115,7 @@ function getLiveTelemetryList(date: Date = new Date(), limit: number = 2000, off
   for (let i = (offset % sampleStep); i < total && result.length < limit; i += sampleStep) {
     const item = wrappers[i];
     if (!priorityIds.has(item.record.id)) {
-      const summary = getObjectSummary(item.wrapper, date, true, gmst, true);
+      const summary = getObjectSummary(item.wrapper, date, true, gmst, false);
       result.push({
         id: summary.id,
         name: summary.name,
@@ -142,7 +142,7 @@ function getObjectsSummaries(date: Date = new Date(), skipOrbitSample = true, li
 
   const gmst = satellite.gstime(date);
   const slice = typeof limit === 'number' ? wrappers.slice(offset, offset + limit) : wrappers;
-  return slice.map((item) => getObjectSummary(item.wrapper, date, skipOrbitSample, gmst, true));
+  return slice.map((item) => getObjectSummary(item.wrapper, date, skipOrbitSample, gmst, false));
 }
 
 function broadcastWsMessage(data: any) {
