@@ -3,24 +3,22 @@ import missionState from '../../stores/missionStore';
 import { PATH_LENGTH } from './RoverPath';
 
 /**
- * MissionHUD — glassmorphism HUD overlay with mission telemetry.
- * Shows distance, craters discovered, data collected, and status.
+ * MissionHUD — Aerospace HUD telemetry overlay matching Image 2 reference.
+ * Features clean left-side flight telemetry, top branding, and right-side scroll tracker.
  */
 interface HUDData {
   distance: string;
   craters: number;
-  dataCollected: number;
-  status: string;
-  opacity: number;
+  dataPercent: number;
+  scrollProgress: number;
 }
 
 export function MissionHUD() {
   const [data, setData] = useState<HUDData>({
-    distance: "0",
+    distance: '0.00',
     craters: 0,
-    dataCollected: 0,
-    status: 'STANDBY',
-    opacity: 0,
+    dataPercent: 0,
+    scrollProgress: 0,
   });
   const rafRef = useRef<number | undefined>(undefined);
 
@@ -28,37 +26,27 @@ export function MissionHUD() {
     const update = () => {
       const p = missionState.smoothProgress;
 
-      // HUD visible between 10% and 80% scroll
-      let opacity = 0;
-      if (p > 0.1 && p < 0.8) {
-        const fadeIn = Math.min(1, (p - 0.1) / 0.05);
-        const fadeOut = Math.min(1, (0.8 - p) / 0.05);
-        opacity = Math.min(fadeIn, fadeOut);
-      }
+      // Distance traveled in km
+      const distance = (p * PATH_LENGTH * 0.08).toFixed(2);
 
-      // Distance
-      const distance = (p * PATH_LENGTH * 0.1).toFixed(1);
-
-      // Craters
+      // Craters discovered
       let craters = 0;
       if (missionState.crater1Discovered) craters++;
       if (missionState.crater2Discovered) craters++;
 
-      // Data collected (simulated)
-      const dataCollected = Math.floor(p * 847);
+      // Data collected percentage
+      const dataPercent = Math.min(100, Math.floor(p * 100));
 
-      // Status
-      let status = 'STANDBY';
-      if (p > 0.02 && p < 0.25) status = 'EN ROUTE';
-      else if (p >= 0.25 && p < 0.45) status = 'SCANNING';
-      else if (p >= 0.45 && p < 0.55) status = 'ANALYZING';
-      else if (p >= 0.55 && p < 0.7) status = 'EN ROUTE';
-      else if (p >= 0.7 && p < 0.85) status = 'APPROACHING';
-      else if (p >= 0.85) status = 'MISSION COMPLETE';
+      setData({
+        distance,
+        craters,
+        dataPercent,
+        scrollProgress: p,
+      });
 
-      setData({ distance, craters, dataCollected, status, opacity });
       rafRef.current = requestAnimationFrame(update);
     };
+
     rafRef.current = requestAnimationFrame(update);
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -67,42 +55,66 @@ export function MissionHUD() {
 
   return (
     <>
-      {/* Top-left: Mission status */}
-      <div
-        className="mission-hud hud-top-left"
-        style={{ opacity: data.opacity }}
-      >
-        <div className="hud-card">
-          <div className="hud-label">Mission Status</div>
-          <div className="hud-status">
-            <div className="hud-status-dot" />
-            <div className="hud-status-text">{data.status}</div>
+      {/* ── Top Left: Mission Control Branding (Image 2) ── */}
+      <div className="fixed top-6 left-8 z-40 pointer-events-none hidden md:flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
+        <span className="font-['Orbitron'] text-[11px] font-bold tracking-[0.25em] text-slate-300 uppercase">
+          MISSION CONTROL
+        </span>
+      </div>
+
+      {/* ── Top Right: Lunar Sector Status (Image 2) ── */}
+      <div className="fixed top-6 right-8 z-40 pointer-events-none hidden md:flex flex-col items-end text-right font-['Orbitron']">
+        <span className="text-[10px] font-bold tracking-[0.2em] text-slate-300 uppercase">
+          LUNAR EXPLORATION
+        </span>
+        <span className="text-[9px] font-semibold tracking-[0.15em] text-slate-500 uppercase mt-0.5">
+          SECTOR MARE-IX &nbsp;•&nbsp; <span className="text-emerald-400">LIVE</span>
+        </span>
+      </div>
+
+      {/* ── Left Side: Primary Telemetry Indicators (Image 2) ── */}
+      <div className="fixed top-1/2 -translate-y-1/2 left-8 z-30 pointer-events-none hidden sm:flex flex-col gap-6">
+        <div>
+          <div className="font-['Orbitron'] text-[9px] font-bold tracking-[0.25em] text-slate-500 uppercase mb-1">
+            DISTANCE TRAVELED
+          </div>
+          <div className="font-['Orbitron'] text-2xl font-bold text-white tracking-wider flex items-baseline gap-1">
+            {data.distance} <span className="text-xs font-medium text-slate-400">km</span>
           </div>
         </div>
-        <div className="hud-card">
-          <div className="hud-label">Distance</div>
-          <div className="hud-value">
-            {data.distance}<span className="hud-unit">KM</span>
+
+        <div>
+          <div className="font-['Orbitron'] text-[9px] font-bold tracking-[0.25em] text-slate-500 uppercase mb-1">
+            CRATERS DISCOVERED
+          </div>
+          <div className="font-['Orbitron'] text-2xl font-bold text-white tracking-wider">
+            {String(data.craters).padStart(2, '0')}
+          </div>
+        </div>
+
+        <div>
+          <div className="font-['Orbitron'] text-[9px] font-bold tracking-[0.25em] text-slate-500 uppercase mb-1">
+            DATA COLLECTED
+          </div>
+          <div className="font-['Orbitron'] text-2xl font-bold text-white tracking-wider flex items-baseline gap-1">
+            {data.dataPercent} <span className="text-xs font-medium text-slate-400">%</span>
           </div>
         </div>
       </div>
 
-      {/* Top-right: Discovery stats */}
-      <div
-        className="mission-hud hud-top-right"
-        style={{ opacity: data.opacity }}
-      >
-        <div className="hud-card">
-          <div className="hud-label">Craters Found</div>
-          <div className="hud-value">{data.craters}<span className="hud-unit">/ 2</span></div>
-        </div>
-        <div className="hud-card">
-          <div className="hud-label">Data Collected</div>
-          <div className="hud-value">{data.dataCollected}<span className="hud-unit">MB</span></div>
-        </div>
+      {/* ── Right Side: Vertical Scroll Track Indicator (Image 2) ── */}
+      <div className="fixed top-1/2 -translate-y-1/2 right-8 z-30 pointer-events-none h-48 w-0.5 bg-white/10 rounded-full flex flex-col justify-start">
+        <div
+          className="w-2.5 h-2.5 -ml-1 rounded-full bg-cyan-400 shadow-[0_0_10px_#00e5ff] transition-all duration-75"
+          style={{
+            transform: `translateY(${data.scrollProgress * 180}px)`
+          }}
+        />
       </div>
     </>
   );
 }
 
 export default MissionHUD;
+

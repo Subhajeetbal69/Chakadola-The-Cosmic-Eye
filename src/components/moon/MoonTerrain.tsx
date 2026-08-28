@@ -12,12 +12,17 @@ import { generateNoiseTexture } from '../../utils/textureGenerator';
 export function MoonTerrain() {
   const meshRef = useRef<THREE.Mesh>(null);
 
-  // Load the realistic photographic moon texture
+  // Load the realistic photographic moon texture with maximum sharpness and anisotropic filtering
   const albedoTexture = useLoader(THREE.TextureLoader, '/moon_texture.jpg') as THREE.Texture;
   albedoTexture.wrapS = THREE.RepeatWrapping;
   albedoTexture.wrapT = THREE.RepeatWrapping;
-  albedoTexture.repeat.set(8, 8); // Repeat to tile it nicely across the 200x200 plane
+  albedoTexture.repeat.set(24, 24); // Fine tiling for razor-sharp micro detail
   albedoTexture.colorSpace = THREE.SRGBColorSpace;
+  albedoTexture.anisotropy = 16; // Fixes grazing angle stretching & blurring
+  albedoTexture.minFilter = THREE.LinearMipmapLinearFilter;
+  albedoTexture.magFilter = THREE.LinearFilter;
+  albedoTexture.generateMipmaps = true;
+  albedoTexture.needsUpdate = true;
 
   // Generate terrain geometry with displacement
   const geometry = useMemo(() => {

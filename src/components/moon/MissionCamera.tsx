@@ -5,38 +5,39 @@ import missionState from '../../stores/missionStore';
 import { getRoverState } from './RoverPath';
 
 /**
- * MissionCamera — Drone-style follow camera.
- * Captures from the top of the rover. It moves with the rover on X and Z axes
- * but its Y altitude remains fixed for smooth cinematics.
+ * MissionCamera — Hero cinematic follow camera.
+ * Positions closely and heroically behind the Rover, framing its chassis,
+ * mast, and wheels as the prominent main subject of the scene.
  */
 export function MissionCamera() {
   const { camera } = useThree();
-  const currentPos = useRef(new THREE.Vector3(0, 15, 5));
-  const currentLookAt = useRef(new THREE.Vector3(0, 0, 0));
+  const currentPos = useRef(new THREE.Vector3(0, 3.2, 5.8));
+  const currentLookAt = useRef(new THREE.Vector3(0, 1.2, 0));
 
   useFrame(() => {
     const progress = missionState.smoothProgress;
     const { position: roverPos } = getRoverState(progress);
 
-    // Drone flight altitude (fixed)
-    const droneAltitude = 4; 
+    // Camera framing matching Image 2 reference: elevated chase view with horizon & rolling terrain ahead
+    const droneAltitude = 3.6;
+    const zOffset = 7.8;
 
-    // Target camera position: 20-degree low angle view
+    // Target camera position: elevated and positioned behind the rover
     const targetPos = new THREE.Vector3(
       roverPos.x,
-      droneAltitude,
-      roverPos.z + 11
+      roverPos.y + droneAltitude,
+      roverPos.z + zOffset
     );
 
-    // Target look-at
+    // Target look-at focused in front of the rover towards the lunar horizon
     const targetLookAt = new THREE.Vector3(
       roverPos.x,
-      0,
-      roverPos.z
+      roverPos.y + 0.6,
+      roverPos.z - 4.5
     );
 
     // Smooth follow interpolation
-    const smoothFactor = 0.06;
+    const smoothFactor = 0.08;
     currentPos.current.lerp(targetPos, smoothFactor);
     currentLookAt.current.lerp(targetLookAt, smoothFactor);
 

@@ -15,26 +15,32 @@ import { Globe, ShieldAlert, Radio } from 'lucide-react';
 function SectionText() {
   const [currentSection, setCurrentSection] = useState('hero');
   const [opacity, setOpacity] = useState(1);
+  const [blurPx, setBlurPx] = useState(14);
   const rafRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const update = () => {
       const p = missionState.smoothProgress;
 
-      if (p < 0.05) {
+      if (p < 0.07) {
         setCurrentSection('hero');
-        setOpacity(1 - p / 0.05);
-      } else if (p > 0.08 && p < 0.18) {
+        const factor = Math.max(0, 1 - p / 0.05);
+        setOpacity(factor);
+        setBlurPx(factor * 14);
+      } else if (p > 0.08 && p < 0.22) {
         setCurrentSection('journey');
         const fadeIn = Math.min(1, (p - 0.08) / 0.03);
-        const fadeOut = Math.min(1, (0.18 - p) / 0.03);
+        const fadeOut = Math.min(1, (0.22 - p) / 0.03);
         setOpacity(Math.min(fadeIn, fadeOut));
+        setBlurPx(0);
       } else if (p > 0.88 && p < 1.0) {
         setCurrentSection('final');
         const fadeIn = Math.min(1, (p - 0.88) / 0.04);
         setOpacity(fadeIn);
+        setBlurPx(0);
       } else {
         setOpacity(0);
+        setBlurPx(0);
       }
 
       rafRef.current = requestAnimationFrame(update);
@@ -49,9 +55,24 @@ function SectionText() {
 
   const sections: Record<string, React.ReactNode> = {
     hero: (
-      <div className="hero-overlay" style={{ opacity }}>
-        <div className="hero-title">MISSION CONTROL</div>
-        <div className="hero-subtitle">Lunar Exploration & Orbital Defense</div>
+      <div
+        className="hero-overlay"
+        style={{
+          opacity,
+          backdropFilter: `blur(${blurPx}px)`,
+          WebkitBackdropFilter: `blur(${blurPx}px)`,
+          backgroundColor: `rgba(6, 8, 16, ${opacity * 0.52})`,
+        }}
+      >
+        <div className="hero-tagline">
+          MISSION CONTROL &nbsp;•&nbsp; LUNAR EXPLORATION
+        </div>
+        <h1 className="hero-title">
+          BEGIN THE<br />MISSION
+        </h1>
+        <p className="hero-description">
+          Explore the unknown. Scroll to guide the rover across the lunar surface and uncover what waits at the far site.
+        </p>
       </div>
     ),
     journey: (
@@ -163,8 +184,8 @@ export function HomePage() {
       <div className="canvas-container">
         <Canvas
           shadows
-          dpr={[1, 1.5]}
-          camera={{ position: [0, 5, 13], fov: 55, near: 0.1, far: 1000 }}
+          dpr={[1, 2]}
+          camera={{ position: [0, 4.2, 8.5], fov: 48, near: 0.1, far: 1000 }}
           gl={{
             antialias: true,
             alpha: false,

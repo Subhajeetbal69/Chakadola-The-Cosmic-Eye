@@ -399,21 +399,21 @@ export function EarthPage() {
 
       {/* ── 2D Orbit Plane Modal / Overlay ─────────────────────── */}
       {activeTab === '2D' && (
-        <div className="fixed inset-4 sm:inset-10 z-50 bg-slate-950/85 border border-white/15 rounded-3xl p-4 sm:p-6 shadow-2xl backdrop-blur-2xl overflow-auto flex flex-col">
-          <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/10">
-            <div className="flex items-center gap-2 text-cyan-400 font-mono text-sm font-bold">
-              <Orbit className="w-4 h-4" />
+        <div className="fixed inset-3 sm:inset-6 z-50 bg-slate-950/90 border border-white/15 rounded-3xl p-3 sm:p-5 shadow-2xl backdrop-blur-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex items-center justify-between pb-3 mb-2 border-b border-white/10">
+            <div className="flex items-center gap-2.5 text-cyan-400 font-mono text-sm font-bold">
+              <Orbit className="w-4 h-4 text-cyan-400" />
               <span>2D ORBITAL PLANE PROJECTION</span>
             </div>
             <button
               onClick={() => setActiveTab('3D')}
-              className="px-3.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(6,182,212,0.4)] cursor-pointer"
+              className="px-4 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(6,182,212,0.4)] cursor-pointer"
             >
               <Globe className="w-3.5 h-3.5" />
               <span>Return to 3D Earth</span>
             </button>
           </div>
-          <div className="flex-1 min-h-[400px]">
+          <div className="flex-1 w-full h-full min-h-[460px] overflow-hidden rounded-2xl">
             <Orbit2DView
               objects={objects}
               selectedConjunction={selectedConjunction}
