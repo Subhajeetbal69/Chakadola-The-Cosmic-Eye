@@ -28,14 +28,106 @@ export function generateTrajectoryFromEci(points: Array<{ x: number; y: number; 
   return points.map((p) => eciToScenePosition(p.x, p.y, p.z));
 }
 
+export interface OrbitBasis {
+  u: THREE.Vector3; // Unit radial vector to initial position (t=0)
+  v: THREE.Vector3; // Unit tangent vector in direction of orbital motion
+  w: THREE.Vector3; // Unit normal vector to orbital plane (angular momentum direction)
+  radius: number;   // Orbital radius in 3D Scene units
+}
+
 /**
- * Calculates a 3D position from Keplerian orbital elements (fallback when ECI is not precomputed).
- * @param sma Semi-major axis (in 3D scene units)
- * @param ecc Eccentricity (0 = circular, <1 = elliptical)
- * @param inc Inclination (in radians)
- * @param raan Right Ascension of the Ascending Node (in radians)
- * @param aop Argument of Periapsis (in radians)
- * @param ta True Anomaly (in radians, defines current position along orbit)
+ * Computes exact orthonormal 3D orbital plane basis vectors (u, v, w) directly from
+ * real ECI position and velocity (or inclination) in Three.js coordinates.
+ * This guarantees the satellite's motion and its orbit path line are 100% mathematically identical.
+ */
+export function computeOrbitBasis(
+  posKm?: { x: number; y: number; z: number } | null,
+  velKmS?: { x: number; y: number; z: number } | null,
+  incDeg: number = 51.6,
+  altitudeKm: number = 400
+): OrbitBasis {
+  // If no position provided, generate a sensible default on the equator
+  if (!posKm || (posKm.x === 0 && posKm.y === 0 && posKm.z === 0)) {
+    const defaultR = EARTH_RADIUS + Math.max(120, altitudeKm) * SCALE_FACTOR;
+    const incRad = (incDeg * Math.PI) / 180;
+    const u = new THREE.Vector3(1, 0, 0);
+    const w = new THREE.Vector3(0, Math.cos(incRad), Math.sin(incRad)).normalize();
+    const v = new THREE.Vector3().crossVectors(w, u).normalize();
+    return { u, v, w, radius: defaultR };
+  }
+
+  const p0 = eciToScenePosition(posKm.x, posKm.y, posKm.z);
+  const radius = p0.length();
+
+  if (radius < 0.1) {
+    const defaultR = EARTH_RADIUS + Math.max(120, altitudeKm) * SCALE_FACTOR;
+    const u = new THREE.Vector3(1, 0, 0);
+    const v = new THREE.Vector3(0, 1, 0);
+    const w = new THREE.Vector3(0, 0, 1);
+    return { u, v, w, radius: defaultR };
+  }
+
+  const u = p0.clone().normalize();
+  let w = new THREE.Vector3();
+
+  // Try calculating plane normal from angular momentum vector h = r x v
+  if (velKmS && (Math.abs(velKmS.x) > 0.0001 || Math.abs(velKmS.y) > 0.0001 || Math.abs(velKmS.z) > 0.0001)) {
+    const v0 = eciToScenePosition(velKmS.x, velKmS.y, velKmS.z);
+    w.crossVectors(p0, v0);
+    if (w.lengthSq() > 1e-8) {
+      w.normalize();
+    }
+  }
+
+  // If velocity is unavailable or degenerate, construct plane normal from inclination
+  if (w.lengthSq() < 0.5) {
+    const incRad = (incDeg * Math.PI) / 180;
+    const cosI = Math.cos(incRad);
+    const sinI = Math.sin(incRad);
+
+    const uy = u.y;
+    const ux = u.x;
+    const uz = u.z;
+    const horizontalR = Math.sqrt(ux * ux + uz * uz);
+
+    if (horizontalR > 1e-4) {
+      const factor = (-uy * cosI) / (horizontalR * horizontalR);
+      const wx = factor * ux - (sinI * uz) / horizontalR;
+      const wz = factor * uz + (sinI * ux) / horizontalR;
+      w.set(wx, cosI, wz).normalize();
+    } else {
+      w.set(sinI, cosI, 0).normalize();
+    }
+  }
+
+  const v = new THREE.Vector3().crossVectors(w, u).normalize();
+
+  return { u, v, w, radius };
+}
+
+/**
+ * Generates a closed, continuous 360-degree orbital loop path from basis vectors.
+ */
+export function generateOrbitCircleFromBasis(basis: OrbitBasis, segments = 128): THREE.Vector3[] {
+  const points: THREE.Vector3[] = [];
+  const { u, v, radius } = basis;
+  for (let i = 0; i <= segments; i++) {
+    const angle = (i / segments) * Math.PI * 2;
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    points.push(
+      new THREE.Vector3(
+        radius * (cosA * u.x + sinA * v.x),
+        radius * (cosA * u.y + sinA * v.y),
+        radius * (cosA * u.z + sinA * v.z)
+      )
+    );
+  }
+  return points;
+}
+
+/**
+ * Calculates a 3D position from Keplerian orbital elements (legacy fallback).
  */
 export function getOrbitalPosition(sma: number, ecc: number, inc: number, raan: number, aop: number, ta: number): THREE.Vector3 {
   const r = (sma * (1 - ecc * ecc)) / (1 + ecc * Math.cos(ta));
@@ -78,3 +170,4 @@ export function calculateOrbitalVelocity(altitudeKm: number): number {
   const v = Math.sqrt((G * M) / r);
   return v / 1000; // Return in km/s
 }
+
