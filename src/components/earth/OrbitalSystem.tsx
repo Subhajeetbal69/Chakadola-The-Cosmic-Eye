@@ -369,12 +369,12 @@ export function OrbitalSystem({
         <meshBasicMaterial visible={false} side={THREE.BackSide} />
       </mesh>
 
-      {/* 1. Active Satellites (Sharp White Dots) */}
+      {/* 1. Active Satellites (Vibrant High-Tech Emerald Green Dots) */}
       {satList.length > 0 && (
         <points ref={satPointsRef}>
           <bufferGeometry
             onUpdate={(self) => {
-              self.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 120);
+              self.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 200);
             }}
           >
             <bufferAttribute
@@ -385,8 +385,8 @@ export function OrbitalSystem({
             />
           </bufferGeometry>
           <pointsMaterial
-            color="#ffffff"
-            size={0.12}
+            color="#00ff66"
+            size={0.16}
             map={circleTexture}
             transparent={true}
             opacity={0.95}
@@ -402,7 +402,7 @@ export function OrbitalSystem({
         <points ref={debrisPointsRef}>
           <bufferGeometry
             onUpdate={(self) => {
-              self.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 120);
+              self.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 200);
             }}
           >
             <bufferAttribute
@@ -414,7 +414,7 @@ export function OrbitalSystem({
           </bufferGeometry>
           <pointsMaterial
             color="#ff2244"
-            size={0.08}
+            size={0.10}
             map={circleTexture}
             transparent={true}
             opacity={0.9}
@@ -430,7 +430,7 @@ export function OrbitalSystem({
         <points ref={rocketPointsRef}>
           <bufferGeometry
             onUpdate={(self) => {
-              self.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 120);
+              self.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 200);
             }}
           >
             <bufferAttribute
@@ -442,7 +442,7 @@ export function OrbitalSystem({
           </bufferGeometry>
           <pointsMaterial
             color="#0088ff"
-            size={0.10}
+            size={0.12}
             map={circleTexture}
             transparent={true}
             opacity={0.95}

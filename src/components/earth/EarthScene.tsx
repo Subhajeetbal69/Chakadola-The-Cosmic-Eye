@@ -36,7 +36,7 @@ function CameraController({ zoomAction }: { zoomAction?: ZoomAction | null }) {
       }
     } else if (zoomAction.type === 'OUT') {
       const currentDist = camera.position.length();
-      const newDist = Math.min(80, currentDist * 1.35);
+      const newDist = Math.min(220, currentDist * 1.35);
       camera.position.setLength(newDist);
       if (controlsRef.current) {
         controlsRef.current.update();
@@ -56,7 +56,7 @@ function CameraController({ zoomAction }: { zoomAction?: ZoomAction | null }) {
       enablePan={false}
       enableZoom={true}
       minDistance={11.5}
-      maxDistance={85}
+      maxDistance={250}
       dampingFactor={0.05}
       enableDamping={true}
       rotateSpeed={0.5}
@@ -78,7 +78,7 @@ export function EarthScene({
 }: EarthSceneProps) {
   return (
     <Canvas
-      camera={{ position: [0, 6, 26], fov: 45 }}
+      camera={{ position: [0, 6, 26], fov: 45, near: 0.1, far: 3000 }}
       onCreated={() => {
         if (onLoaded) onLoaded();
       }}
@@ -88,13 +88,13 @@ export function EarthScene({
       
       {/* Cosmos Background Stars */}
       <Stars 
-        radius={120} 
-        depth={60} 
-        count={6000} 
-        factor={4} 
+        radius={350} 
+        depth={100} 
+        count={5000} 
+        factor={3} 
         saturation={0} 
         fade 
-        speed={0.4} 
+        speed={0.3} 
       />
 
       {/* Ambient Lighting for the Dark Side */}

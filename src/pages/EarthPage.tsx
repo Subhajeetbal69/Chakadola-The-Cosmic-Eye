@@ -223,10 +223,10 @@ export function EarthPage() {
             <div className="stats space-y-1.5">
               <div className="flex items-center justify-between gap-4 text-xs font-mono">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-white shadow-[0_0_8px_#ffffff]" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#00ff66] shadow-[0_0_8px_#00ff66]" />
                   <span className="text-slate-300">SATELLITES:</span>
                 </div>
-                <span className="highlight text-white font-bold">{activeSatsCount.toLocaleString()}</span>
+                <span className="highlight text-[#00ff66] font-bold">{activeSatsCount.toLocaleString()}</span>
               </div>
               <div className="flex items-center justify-between gap-4 text-xs font-mono">
                 <div className="flex items-center gap-2">
@@ -328,7 +328,7 @@ export function EarthPage() {
                 <span className="label">TYPE</span>
                 <span className={`value text-xs font-semibold px-2 py-0.5 rounded ${
                   selectedObject.classification === 'ACTIVE_SATELLITE'
-                    ? 'bg-white/20 text-white border border-white/30'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                     : selectedObject.classification === 'ROCKET_BODY'
                     ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                     : 'bg-red-500/20 text-red-300 border border-red-500/30'
