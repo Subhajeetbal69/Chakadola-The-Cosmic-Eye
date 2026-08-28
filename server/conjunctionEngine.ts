@@ -62,45 +62,40 @@ export function calculateRiskScore(
   timeToEventHours: number,
   config: SystemConfig = DEFAULT_CONFIG
 ): RiskScoreBreakdown {
-  // 1. Distance Risk Score (0 - 100)
+  
+  // 1. Distance Risk Score (Polynomial Decay)
+  // Holds at 100 for < 1km, then decays smoothly to 0 at the threshold.
   let distanceScore = 0;
   if (minDistanceKm < 1.0) {
     distanceScore = 100;
-  } else if (minDistanceKm < 2.0) {
-    distanceScore = 80 + (2.0 - minDistanceKm) * 20; // 80 - 100
-  } else if (minDistanceKm < 5.0) {
-    distanceScore = 60 + ((5.0 - minDistanceKm) / 3.0) * 20; // 60 - 80
-  } else if (minDistanceKm < 10.0) {
-    distanceScore = 30 + ((10.0 - minDistanceKm) / 5.0) * 30; // 30 - 60
-  } else if (minDistanceKm <= config.distanceThresholdKm) {
-    distanceScore = Math.max(0, ((config.distanceThresholdKm - minDistanceKm) / (config.distanceThresholdKm - 10.0)) * 30);
   } else {
-    distanceScore = 0;
+    // Normalizing the distance between 1.0 and the threshold
+    const effectiveRange = config.distanceThresholdKm - 1.0;
+    const normalizedDistance = Math.max(0, 1 - ((minDistanceKm - 1.0) / effectiveRange));
+    distanceScore = 100 * Math.pow(normalizedDistance, 2);
   }
 
-  // 2. Relative Velocity Contribution (0 - 100)
-  let velocityScore = 0;
-  if (relativeVelocityKmS >= 10.0) {
-    velocityScore = 100;
-  } else if (relativeVelocityKmS >= 5.0) {
-    velocityScore = 60 + ((relativeVelocityKmS - 5.0) / 5.0) * 40; // 60 - 100
-  } else {
-    velocityScore = Math.max(10, (relativeVelocityKmS / 5.0) * 60); // 10 - 60
-  }
+  // 2. Relative Velocity Contribution (Quadratic Scaling)
+  // Based on original code capping at 10.0 km/s.
+  // Using Math.max(10, ...) preserves original minimum baseline score of 10.
+  const maxVelocityKmS = 10.0;
+  const velocityRatio = Math.min(1.0, relativeVelocityKmS / maxVelocityKmS);
+  const velocityScore = Math.max(10, 100 * Math.pow(velocityRatio, 2));
 
-  // 3. Time-to-Event Contribution (0 - 100)
+  // 3. Time-to-Event Contribution (Exponential Decay)
+  // Holds at 100 for < 1 hour. 
+  // A decay rate of 0.052 perfectly hits a score of ~30 at 24 hours, matching original logic.
   let timeScore = 0;
   if (timeToEventHours < 1.0) {
     timeScore = 100;
-  } else if (timeToEventHours <= 6.0) {
-    timeScore = 70 + ((6.0 - timeToEventHours) / 5.0) * 30; // 70 - 100
-  } else if (timeToEventHours <= 24.0) {
-    timeScore = 30 + ((24.0 - timeToEventHours) / 18.0) * 40; // 30 - 70
   } else {
-    timeScore = Math.max(5, 30 - (timeToEventHours - 24.0) * 0.5);
+    const timeDecayRate = 0.052; 
+    timeScore = 100 * Math.exp(-timeDecayRate * (timeToEventHours - 1.0));
+    // Ensures a minimum floor score of 5, matching original long-tail logic
+    timeScore = Math.max(5, timeScore);
   }
 
-  // Weighted Combination
+  // 4. Weighted Combination
   const wDist = config.riskWeights.distance;
   const wVel = config.riskWeights.velocity;
   const wTime = config.riskWeights.time;
@@ -108,6 +103,7 @@ export function calculateRiskScore(
   const rawFinalScore = wDist * distanceScore + wVel * velocityScore + wTime * timeScore;
   const finalRiskScore = Math.min(100, Math.max(0, Number(rawFinalScore.toFixed(1))));
 
+  // 5. Risk Level Evaluation
   let riskLevel: RiskLevel = 'LOW';
   if (finalRiskScore >= config.riskThresholds.critical) {
     riskLevel = 'CRITICAL';
@@ -138,49 +134,75 @@ export function calculateRiskScore(
 /**
  * Refines the closest approach around an initial detected timestamp using 1-second sub-stepping
  */
-function refineClosestApproach(
+export function refineClosestApproach(
   wrapperA: SatrecWrapper,
   wrapperB: SatrecWrapper,
   centerDate: Date,
-  windowSeconds: number = 60
+  windowSeconds: number = 60,
+  toleranceSeconds: number = 0.1 // Sub-second precision limit
 ): { minDistance: number; tcaDate: Date; posA: Vector3D; posB: Vector3D; relVel: number } {
-  let bestDist = Infinity;
-  let bestDate = centerDate;
-  let bestPosA: Vector3D = { x: 0, y: 0, z: 0 };
-  let bestPosB: Vector3D = { x: 0, y: 0, z: 0 };
-  let bestRelVel = 0;
-
   const centerMs = centerDate.getTime();
-  for (let s = -windowSeconds; s <= windowSeconds; s += 2) {
-    const d = new Date(centerMs + s * 1000);
+  
+  // Define our search boundaries in milliseconds
+  let leftMs = centerMs - (windowSeconds * 1000);
+  let rightMs = centerMs + (windowSeconds * 1000);
+  const toleranceMs = toleranceSeconds * 1000;
+
+  // Helper function to evaluate the distance at a given millisecond timestamp
+  const evaluateDistance = (timeMs: number): number => {
+    const d = new Date(timeMs);
     const ptA = propagateAtTime(wrapperA, d);
     const ptB = propagateAtTime(wrapperB, d);
+    
+    // If propagation fails, return Infinity so the search discards this path
+    if (!ptA || !ptB) return Infinity; 
+    return calculateDistance(ptA.position, ptB.position);
+  };
 
-    if (ptA && ptB) {
-      const dist = calculateDistance(ptA.position, ptB.position);
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestDate = d;
-        bestPosA = ptA.position;
-        bestPosB = ptB.position;
-        bestRelVel = calculateRelativeVelocity(ptA.velocity, ptB.velocity);
-      }
+  // Narrow the window until the time gap is smaller than our tolerance
+  while (rightMs - leftMs > toleranceMs) {
+    // Slice the current window into thirds
+    const third = (rightMs - leftMs) / 3;
+    const m1 = leftMs + third;
+    const m2 = rightMs - third;
+
+    const dist1 = evaluateDistance(m1);
+    const dist2 = evaluateDistance(m2);
+
+    // Discard the higher side to "zoom in" on the lowest point
+    if (dist1 < dist2) {
+      rightMs = m2; 
+    } else {
+      leftMs = m1; 
     }
   }
 
+  // Once the loop ends, the exact TCA is pinpointed directly in the middle
+  const tcaMs = (leftMs + rightMs) / 2;
+  const tcaDate = new Date(tcaMs);
+  
+  // Do one final propagation at the exact TCA to get the full state vectors
+  const finalA = propagateAtTime(wrapperA, tcaDate)!;
+  const finalB = propagateAtTime(wrapperB, tcaDate)!;
+
   return {
-    minDistance: bestDist,
-    tcaDate: bestDate,
-    posA: bestPosA,
-    posB: bestPosB,
-    relVel: bestRelVel
+    minDistance: calculateDistance(finalA.position, finalB.position),
+    tcaDate: tcaDate,
+    posA: finalA.position,
+    posB: finalB.position,
+    relVel: calculateRelativeVelocity(finalA.velocity, finalB.velocity)
   };
 }
 
 /**
- * Performs pairwise conjunction detection across all tracked orbital objects using
- * high-performance spatial bounding shell broad-phase pruning.
- * Scales effortlessly to 16,063+ objects in sub-100ms execution time.
+ * Multi-stage conjunction detection engine.
+ * Processes ALL candidate pairs without hard capping using a progressive
+ * filtering pipeline:
+ *   Stage 1: Debris/RocketBody mutual collision exclusion
+ *   Stage 2: Apogee/Perigee altitude shell overlap (sweep-and-prune)
+ *   Stage 3: 4D Sieve (RAAN + Inclination + orbital geometry)
+ *   Stage 4: Fast Keplerian trajectory distance screening (squared distance)
+ *   Stage 5: SGP4-based refinement for close approach
  */
 export function detectConjunctions(
   tleRecords: TleRecord[],
@@ -189,122 +211,442 @@ export function detectConjunctions(
 ): ConjunctionEvent[] {
   const wrappers = tleRecords.map((r) => createSatrec(r)).filter((w) => w.isValid);
   const n = wrappers.length;
-  console.log(`[Conjunction Engine] Starting scalable spatial analysis for ${n} objects...`);
+  const perfStart = Date.now();
+  console.log(`[Conjunction Engine] Starting multi-stage analysis for ${n} objects...`);
 
   const events: ConjunctionEvent[] = [];
   const thresholdKm = Math.max(config.distanceThresholdKm, 25);
   const EARTH_RADIUS_KM = 6378.137;
+  const MU_EARTH_LOCAL = 398600.4418;
+  const startMs = startDate.getTime();
 
-  // 1. Broad-Phase Spatial Pruning: Compute Perigee / Apogee bounding orbital envelope
-  interface CandidateObj {
-    wrapper: SatrecWrapper;
-    minR: number; // km from Earth center
-    maxR: number;
-    inc: number;
+  // Screening threshold for trajectory distance comparison.
+  // At 60-second steps with worst-case relative velocity ~15 km/s,
+  // the true TCA can be up to 30s away from the nearest sample,
+  // giving a sampled distance of ~450 km even for a 0 km TCA.
+  // Use 500 km as a conservative screening threshold.
+  const SCREENING_THRESHOLD_SQ = 500 * 500;
+
+  const totalSteps = Math.floor((config.predictionHours * 3600) / config.timeStepSeconds);
+  const stepMs = config.timeStepSeconds * 1000;
+
+  // ═══════════════════════════════════════════════════════════════
+  // Fast Keplerian position-only trajectory generator.
+  // Pre-computes the PQW→ECI rotation matrix once per object;
+  // only the mean anomaly varies across time steps.
+  // Returns Vector3D[] (positions only) — no velocity, lat/lng, or
+  // Date allocations — for maximum throughput in the screening loop.
+  // ═══════════════════════════════════════════════════════════════
+  function generatePositionTrajectory(record: TleRecord): Vector3D[] {
+    const incRad = (record.inclinationDeg * Math.PI) / 180;
+    const raanRad = (record.raanDeg * Math.PI) / 180;
+    const argPerRad = (record.argPerigeeDeg * Math.PI) / 180;
+    const ecc = Math.max(0.00001, Math.min(0.95, record.eccentricity));
+    const meanMotionRevDay = Math.max(0.1, record.meanMotionRevDay || 15.0);
+
+    const nRadSec = (meanMotionRevDay * 2 * Math.PI) / 86400;
+    const aKm = Math.pow(MU_EARTH_LOCAL / (nRadSec * nRadSec), 1 / 3);
+
+    const epochYear = record.epochYear || 2026;
+    const epochDay = record.epochDay || 1;
+    const epochMs = Date.UTC(epochYear, 0, 1) + (epochDay - 1) * 86400 * 1000;
+
+    // Pre-compute PQW→ECI rotation vectors (constant for the orbit)
+    const cosO = Math.cos(raanRad);
+    const sinO = Math.sin(raanRad);
+    const cosi = Math.cos(incRad);
+    const sini = Math.sin(incRad);
+    const cosw = Math.cos(argPerRad);
+    const sinw = Math.sin(argPerRad);
+
+    const Px = cosO * cosw - sinO * sinw * cosi;
+    const Py = sinO * cosw + cosO * sinw * cosi;
+    const Pz = sinw * sini;
+    const Qx = -cosO * sinw - sinO * cosw * cosi;
+    const Qy = -sinO * sinw + cosO * cosw * cosi;
+    const Qz = cosw * sini;
+
+    const initialM = ((record.meanAnomalyDeg || 0) * Math.PI) / 180;
+    const sqrtOneMinusEccSq = Math.sqrt(1 - ecc * ecc);
+
+    const positions = new Array<Vector3D>(totalSteps + 1);
+    let currentMs = startMs;
+
+    for (let i = 0; i <= totalSteps; i++) {
+      const dtSeconds = (currentMs - epochMs) / 1000;
+
+      // Mean anomaly at this time
+      let M = (initialM + nRadSec * dtSeconds) % (2 * Math.PI);
+      if (M < 0) M += 2 * Math.PI;
+
+      // Solve Kepler's equation via Newton-Raphson
+      let E = M;
+      for (let iter = 0; iter < 10; iter++) {
+        const sinE = Math.sin(E);
+        const cosE = Math.cos(E);
+        const delta = (E - ecc * sinE - M) / (1 - ecc * cosE);
+        E -= delta;
+        if (Math.abs(delta) < 1e-8) break;
+      }
+
+      const cosE = Math.cos(E);
+      const sinE = Math.sin(E);
+      const denom = 1 - ecc * cosE;
+      const cosNu = (cosE - ecc) / denom;
+      const sinNu = (sqrtOneMinusEccSq * sinE) / denom;
+
+      const r = Math.max(EARTH_RADIUS_KM + 120, aKm * (1 - ecc * cosE));
+      const xp = r * cosNu;
+      const yp = r * sinNu;
+
+      // Transform perifocal → ECI using pre-computed rotation
+      positions[i] = {
+        x: xp * Px + yp * Qx,
+        y: xp * Py + yp * Qy,
+        z: xp * Pz + yp * Qz
+      };
+
+      currentMs += stepMs;
+    }
+    return positions;
   }
 
-  const candidateList: CandidateObj[] = wrappers.map((w) => {
+  // ═══════════════════════════════════════════════════════════════
+  // Build enriched candidate objects with orbital elements
+  // ═══════════════════════════════════════════════════════════════
+  interface CandidateObj {
+    wrapper: SatrecWrapper;
+    idx: number;       // original index for cache keying
+    minR: number;      // km from Earth center (R_earth + perigee)
+    maxR: number;      // km from Earth center (R_earth + apogee)
+    inc: number;       // inclination (deg)
+    raanDeg: number;   // right ascension of ascending node (deg)
+    ecc: number;       // eccentricity
+    classification: string;
+  }
+
+  const candidateList: CandidateObj[] = wrappers.map((w, i) => {
     const peri = w.record.perigeeKm ?? 400;
     const apo = w.record.apogeeKm ?? 500;
     return {
       wrapper: w,
+      idx: i,
       minR: EARTH_RADIUS_KM + peri,
       maxR: EARTH_RADIUS_KM + apo,
-      inc: w.record.inclinationDeg ?? 50
+      inc: w.record.inclinationDeg ?? 50,
+      raanDeg: w.record.raanDeg ?? 0,
+      ecc: w.record.eccentricity ?? 0.001,
+      classification: w.record.classification
     };
   });
 
-  // Sort by minR for fast 1D sweep-and-prune interval test
+  // Sort by minR for sweep-and-prune altitude shell filter
   candidateList.sort((a, b) => a.minR - b.minR);
 
-  // Find candidate pairs whose orbital altitude shells overlap within threshold
-  const candidatePairs: Array<[SatrecWrapper, SatrecWrapper]> = [];
-  const maxCandidatePairs = 1000;
+  // ═══════════════════════════════════════════════════════════════
+  // LRU-bounded position trajectory cache
+  // Limits memory to ~MAX_CACHE × 1441 × 24 bytes ≈ 104 MB
+  // ═══════════════════════════════════════════════════════════════
+  const MAX_CACHE = 3000;
+  const trajCache = new Map<number, Vector3D[]>();
 
-  for (let i = 0; i < candidateList.length && candidatePairs.length < maxCandidatePairs; i++) {
+  function getCachedTraj(obj: CandidateObj): Vector3D[] {
+    const key = obj.idx;
+    if (trajCache.has(key)) return trajCache.get(key)!;
+    // Evict oldest entries if cache is at capacity (Map preserves insertion order)
+    while (trajCache.size >= MAX_CACHE) {
+      const firstKey = trajCache.keys().next().value;
+      if (firstKey !== undefined) trajCache.delete(firstKey);
+      else break;
+    }
+    const traj = generatePositionTrajectory(obj.wrapper.record);
+    trajCache.set(key, traj);
+    return traj;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // Stage 4: Temporal Spatial Hash Precomputation
+  // ═══════════════════════════════════════════════════════════════
+  const numCoarseSamples = 6;
+  const CELL_SIZE = 200; // km
+  const spatialHashes = new Array<{cx: number, cy: number, cz: number}[]>(candidateList.length);
+  
+  for (let i = 0; i < candidateList.length; i++) {
+    const record = candidateList[i].wrapper.record;
+    const incRad = (record.inclinationDeg * Math.PI) / 180;
+    const raanRad = (record.raanDeg * Math.PI) / 180;
+    const argPerRad = (record.argPerigeeDeg * Math.PI) / 180;
+    const ecc = Math.max(0.00001, Math.min(0.95, record.eccentricity));
+    const meanMotionRevDay = Math.max(0.1, record.meanMotionRevDay || 15.0);
+    const nRadSec = (meanMotionRevDay * 2 * Math.PI) / 86400;
+    const aKm = Math.pow(MU_EARTH_LOCAL / (nRadSec * nRadSec), 1 / 3);
+    const epochYear = record.epochYear || 2026;
+    const epochDay = record.epochDay || 1;
+    const epochMs = Date.UTC(epochYear, 0, 1) + (epochDay - 1) * 86400 * 1000;
+
+    const cosO = Math.cos(raanRad); const sinO = Math.sin(raanRad);
+    const cosi = Math.cos(incRad);  const sini = Math.sin(incRad);
+    const cosw = Math.cos(argPerRad); const sinw = Math.sin(argPerRad);
+    const Px = cosO * cosw - sinO * sinw * cosi;
+    const Py = sinO * cosw + cosO * sinw * cosi;
+    const Pz = sinw * sini;
+    const Qx = -cosO * sinw - sinO * cosw * cosi;
+    const Qy = -sinO * sinw + cosO * cosw * cosi;
+    const Qz = cosw * sini;
+
+    const initialM = ((record.meanAnomalyDeg || 0) * Math.PI) / 180;
+    const sqrtOneMinusEccSq = Math.sqrt(1 - ecc * ecc);
+    const hashes = [];
+    const step = (config.predictionHours * 3600 * 1000) / (numCoarseSamples - 1);
+    
+    for (let s = 0; s < numCoarseSamples; s++) {
+      const dtSeconds = (startMs + s * step - epochMs) / 1000;
+      let M = (initialM + nRadSec * dtSeconds) % (2 * Math.PI);
+      if (M < 0) M += 2 * Math.PI;
+
+      let E = M;
+      for (let iter = 0; iter < 10; iter++) {
+        const sinE = Math.sin(E);
+        const cosE = Math.cos(E);
+        const delta = (E - ecc * sinE - M) / (1 - ecc * cosE);
+        E -= delta;
+        if (Math.abs(delta) < 1e-8) break;
+      }
+      
+      const cosE = Math.cos(E);
+      const sinE = Math.sin(E);
+      const denom = 1 - ecc * cosE;
+      const r = Math.max(EARTH_RADIUS_KM + 120, aKm * (1 - ecc * cosE));
+      const xp = r * ((cosE - ecc) / denom);
+      const yp = r * ((sqrtOneMinusEccSq * sinE) / denom);
+      hashes.push({
+        cx: Math.floor((xp * Px + yp * Qx) / CELL_SIZE),
+        cy: Math.floor((xp * Py + yp * Qy) / CELL_SIZE),
+        cz: Math.floor((xp * Pz + yp * Qz) / CELL_SIZE)
+      });
+    }
+    spatialHashes[i] = hashes;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // Pipelined pair generation + trajectory screening
+  //   Stage 1: Debris/RocketBody mutual exclusion
+  //   Stage 2: Apogee/Perigee altitude shell overlap (sweep-and-prune)
+  //   Stage 3: 4D Sieve (RAAN + Inclination + orbital geometry)
+  //   Stage 4: Temporal Spatial Hash Sieve
+  //   Stage 5: Coarse Trajectory Scan
+  //   Stage 6: Full Keplerian trajectory distance screening
+  // ═══════════════════════════════════════════════════════════════
+  let stage1Skipped = 0;
+  let stage3Skipped = 0;
+  let stage4Skipped = 0;
+  let stage5Skipped = 0;
+  let stage6Checked = 0;
+  let stage6Passed = 0;
+
+  interface RefinementCandidate {
+    objA: CandidateObj;
+    objB: CandidateObj;
+    minTimeIdx: number;
+  }
+  const refinementList: RefinementCandidate[] = [];
+
+  for (let i = 0; i < candidateList.length; i++) {
     const objA = candidateList[i];
-    const isStationA = objA.wrapper.record.name.includes('ISS') || objA.wrapper.record.name.includes('TIANHE') || objA.wrapper.record.name.includes('CSS');
+    const isJunkA = objA.classification === 'DEBRIS' || objA.classification === 'ROCKET_BODY';
+    let trajA: Vector3D[] | null = null; // lazy-loaded per outer iteration
 
-    for (let j = i + 1; j < candidateList.length && candidatePairs.length < maxCandidatePairs; j++) {
+    for (let j = i + 1; j < candidateList.length; j++) {
       const objB = candidateList[j];
 
-      // If B's lowest altitude is higher than A's highest altitude + threshold, no further overlaps possible in this loop
-      if (objB.minR > objA.maxR + thresholdKm) {
-        break;
+      // ── Stage 2: Sweep-and-prune early break ──
+      // If B's perigee is above A's apogee + threshold, no further
+      // objects in the sorted list can overlap with A.
+      if (objB.minR > objA.maxR + thresholdKm) break;
+
+      // ── Stage 1: Skip debris/rocketbody mutual collisions ──
+      // Only pairs involving at least one active satellite or special
+      // object are considered (DEBRIS×DEBRIS, DEBRIS×RB, RB×RB skipped).
+      const isJunkB = objB.classification === 'DEBRIS' || objB.classification === 'ROCKET_BODY';
+      if (isJunkA && isJunkB) {
+        stage1Skipped++;
+        continue;
       }
 
-      // Check if altitude bands intersect
-      const overlaps = objA.maxR + thresholdKm >= objB.minR && objB.maxR + thresholdKm >= objA.minR;
-      if (overlaps) {
-        const isStationB = objB.wrapper.record.name.includes('ISS') || objB.wrapper.record.name.includes('TIANHE') || objB.wrapper.record.name.includes('CSS');
-        if (isStationA && isStationB) continue;
+      // ── Stage 2: Full altitude band overlap check ──
+      if (!(objA.maxR + thresholdKm >= objB.minR && objB.maxR + thresholdKm >= objA.minR))
+        continue;
 
-        candidatePairs.push([objA.wrapper, objB.wrapper]);
+      // Skip station-to-station pairs
+      const nameA = objA.wrapper.record.name;
+      const nameB = objB.wrapper.record.name;
+      const isStationA = nameA.includes('ISS') || nameA.includes('TIANHE') || nameA.includes('CSS');
+      const isStationB = nameB.includes('ISS') || nameB.includes('TIANHE') || nameB.includes('CSS');
+      if (isStationA && isStationB) continue;
+
+      // ── Stage 3: 4D Sieve — orbital geometry filters ──
+      const incDiff = Math.abs(objA.inc - objB.inc);
+      const raanDiffRaw = Math.abs(objA.raanDeg - objB.raanDeg);
+      const raanDiff = raanDiffRaw > 180 ? 360 - raanDiffRaw : raanDiffRaw;
+
+      // 3a: Orbital planes geometrically incompatible —
+      //     large inclination AND large RAAN separation means the
+      //     orbital planes diverge too much for a close approach.
+      if (incDiff > 20 && raanDiff > 90) {
+        stage3Skipped++;
+        continue;
       }
+
+      // 3b: Co-orbiting constellation siblings —
+      //     nearly identical circular orbits maintaining station-keeping
+      //     separation (same altitude, inclination, RAAN).
+      if (objA.ecc < 0.01 && objB.ecc < 0.01 &&
+          Math.abs(objA.maxR - objB.maxR) < 2 && incDiff < 0.5 && raanDiff < 2) {
+        stage3Skipped++;
+        continue;
+      }
+
+      // 3c: High-inclination orbits with large RAAN separation
+      //     and minimal altitude overlap at the node crossing.
+      if (objA.inc > 45 && objB.inc > 45 && raanDiff > 45) {
+        const altOverlap = Math.min(objA.maxR, objB.maxR) - Math.max(objA.minR, objB.minR);
+        if (altOverlap < thresholdKm * 0.5) {
+          stage3Skipped++;
+          continue;
+        }
+      }
+
+      // ── Stage 4: Temporal Spatial Hash Sieve ──
+      let hashPassed = false;
+      const hashesA = spatialHashes[i];
+      const hashesB = spatialHashes[j];
+      for (let s = 0; s < numCoarseSamples; s++) {
+        const cA = hashesA[s];
+        const cB = hashesB[s];
+        if (Math.abs(cA.cx - cB.cx) <= 1 && 
+            Math.abs(cA.cy - cB.cy) <= 1 && 
+            Math.abs(cA.cz - cB.cz) <= 1) {
+          hashPassed = true;
+          break;
+        }
+      }
+      if (!hashPassed) {
+        stage4Skipped++;
+        continue;
+      }
+
+      // ── Stage 5: Coarse Trajectory Scan ──
+      // Lazy-load objA trajectory (stays cached for all j in this i-loop)
+      if (!trajA) trajA = getCachedTraj(objA);
+      const trajB = getCachedTraj(objB);
+      
+      let coarseMinDistSq = Infinity;
+      const coarseStep = Math.max(1, Math.floor(600 / config.timeStepSeconds)); // 10-minute steps
+      for (let k = 0; k <= totalSteps; k += coarseStep) {
+        const dx = trajA[k].x - trajB[k].x;
+        const dy = trajA[k].y - trajB[k].y;
+        const dz = trajA[k].z - trajB[k].z;
+        const dSq = dx * dx + dy * dy + dz * dz;
+        if (dSq < coarseMinDistSq) {
+          coarseMinDistSq = dSq;
+        }
+      }
+
+      const thresholdSq = thresholdKm * thresholdKm;
+      // Only proceed to full narrow-phase if coarse pass shows promise
+      if (coarseMinDistSq > thresholdSq * 16) { // 4x threshold margin
+        stage5Skipped++;
+        continue;
+      }
+
+      // ── Stage 6: Full Trajectory Distance Screening ──
+      stage6Checked++;
+      let minDistSq = Infinity;
+      let minIdx = -1;
+
+      // Full scan at config.timeStepSeconds resolution using squared
+      // distance (avoids Math.sqrt in the hot inner loop).
+      for (let k = 0; k <= totalSteps; k++) {
+        const dx = trajA[k].x - trajB[k].x;
+        const dy = trajA[k].y - trajB[k].y;
+        const dz = trajA[k].z - trajB[k].z;
+        const dSq = dx * dx + dy * dy + dz * dz;
+        if (dSq < minDistSq) {
+          minDistSq = dSq;
+          minIdx = k;
+        }
+      }
+
+      if (minDistSq <= SCREENING_THRESHOLD_SQ && minIdx >= 0) {
+        stage6Passed++;
+        refinementList.push({ objA, objB, minTimeIdx: minIdx });
+      }
+    }
+
+    // Progress logging every 2000 outer-loop iterations
+    if (i > 0 && i % 2000 === 0) {
+      console.log(`[Conjunction Engine] Progress: ${i}/${candidateList.length} objects scanned, ${refinementList.length} pairs queued`);
     }
   }
 
-  console.log(`[Conjunction Engine] Broad-phase spatial pruning narrowed 129M pairs to ${candidatePairs.length} candidate pairs.`);
+  const filterTimeS = ((Date.now() - perfStart) / 1000).toFixed(1);
+  console.log(`[Conjunction Engine] Filtering complete in ${filterTimeS}s:`);
+  console.log(`  Stage 1 (Junk exclusion): ${stage1Skipped.toLocaleString()} pairs skipped`);
+  console.log(`  Stage 3 (4D sieve):       ${stage3Skipped.toLocaleString()} pairs skipped`);
+  console.log(`  Stage 4 (Spatial Hash):   ${stage4Skipped.toLocaleString()} pairs skipped`);
+  console.log(`  Stage 5 (Coarse Scan):    ${stage5Skipped.toLocaleString()} pairs skipped`);
+  console.log(`  Stage 6 (Trajectory):     ${stage6Checked.toLocaleString()} checked → ${stage6Passed.toLocaleString()} within ${Math.sqrt(SCREENING_THRESHOLD_SQ)} km screen`);
 
-  // 2. Narrow-Phase Trajectory Evaluation on Candidate Pairs Only
-  const trajCache = new Map<string, ReturnType<typeof generateTrajectory>>();
-  const getTraj = (w: SatrecWrapper) => {
-    if (!trajCache.has(w.record.id)) {
-      trajCache.set(
-        w.record.id,
-        generateTrajectory(w, startDate, config.predictionHours, config.timeStepSeconds)
-      );
-    }
-    return trajCache.get(w.record.id)!;
-  };
+  // Free Keplerian trajectory cache before SGP4 refinement
+  trajCache.clear();
 
-  for (const [wA, wB] of candidatePairs) {
-    const trajA = getTraj(wA);
-    const trajB = getTraj(wB);
+  // ═══════════════════════════════════════════════════════════════
+  // Stage 5: SGP4-based refinement for close approach
+  // Uses ternary search (refineClosestApproach) with sub-second
+  // precision around the rough TCA identified by Keplerian screening.
+  // ═══════════════════════════════════════════════════════════════
+  const refineStart = Date.now();
 
-    let pairMinDist = Infinity;
-    let minIndex = -1;
-    const len = Math.min(trajA.length, trajB.length);
+  for (const { objA, objB, minTimeIdx } of refinementList) {
+    const wA = objA.wrapper;
+    const wB = objB.wrapper;
 
-    for (let k = 0; k < len; k++) {
-      const d = calculateDistance(trajA[k].position, trajB[k].position);
-      if (d < pairMinDist) {
-        pairMinDist = d;
-        minIndex = k;
-      }
-    }
+    // Convert trajectory index back to a Date for SGP4 refinement
+    const roughTcaDate = new Date(startMs + minTimeIdx * stepMs);
+    const refined = refineClosestApproach(wA, wB, roughTcaDate, config.timeStepSeconds);
 
-    if (pairMinDist <= thresholdKm && minIndex >= 0) {
-      const roughTcaDate = new Date(trajA[minIndex].timestamp);
-      const refined = refineClosestApproach(wA, wB, roughTcaDate, config.timeStepSeconds);
+    if (refined.minDistance <= config.distanceThresholdKm) {
+      const timeToEventHours = Math.max(0, (refined.tcaDate.getTime() - startMs) / (1000 * 3600));
+      const breakdown = calculateRiskScore(refined.minDistance, refined.relVel, timeToEventHours, config);
 
-      if (refined.minDistance <= config.distanceThresholdKm) {
-        const timeToEventHours = Math.max(0, (refined.tcaDate.getTime() - startDate.getTime()) / (1000 * 3600));
-        const breakdown = calculateRiskScore(refined.minDistance, refined.relVel, timeToEventHours, config);
+      const summaryA = getObjectSummary(wA, startDate, true);
+      const summaryB = getObjectSummary(wB, startDate, true);
 
-        const summaryA = getObjectSummary(wA, startDate, true);
-        const summaryB = getObjectSummary(wB, startDate, true);
-
-        events.push({
-          id: `CONJ-${wA.record.id}-${wB.record.id}`,
-          objectA: summaryA,
-          objectB: summaryB,
-          tcaIso: refined.tcaDate.toISOString(),
-          tcaTimestamp: refined.tcaDate.getTime(),
-          timeToEventHours: Number(timeToEventHours.toFixed(2)),
-          minDistanceKm: Number(refined.minDistance.toFixed(3)),
-          relativeVelocityKmS: Number(refined.relVel.toFixed(2)),
-          riskScore: breakdown.finalRiskScore,
-          riskLevel: breakdown.riskLevel,
-          breakdown,
-          positionAAtTca: refined.posA,
-          positionBAtTca: refined.posB
-        });
-      }
+      events.push({
+        id: `CONJ-${wA.record.id}-${wB.record.id}`,
+        objectA: summaryA,
+        objectB: summaryB,
+        tcaIso: refined.tcaDate.toISOString(),
+        tcaTimestamp: refined.tcaDate.getTime(),
+        timeToEventHours: Number(timeToEventHours.toFixed(2)),
+        minDistanceKm: Number(refined.minDistance.toFixed(3)),
+        relativeVelocityKmS: Number(refined.relVel.toFixed(2)),
+        riskScore: breakdown.finalRiskScore,
+        riskLevel: breakdown.riskLevel,
+        breakdown,
+        positionAAtTca: refined.posA,
+        positionBAtTca: refined.posB
+      });
     }
   }
 
-  // 3. Ensure authentic conjunction threats for high-priority active constellations vs debris
+  const refineTimeS = ((Date.now() - refineStart) / 1000).toFixed(1);
+  console.log(`[Conjunction Engine] Refinement: ${refinementList.length} candidates → ${events.length} confirmed events (${refineTimeS}s)`);
+
+  // ═══════════════════════════════════════════════════════════════
+  // Synthetic fallback: ensure minimum conjunction events for
+  // high-priority active constellations vs debris/rocket bodies
+  // ═══════════════════════════════════════════════════════════════
   if (events.length < 5 && wrappers.length >= 2) {
     const activeWrappers = wrappers.filter((w) => w.record.classification === 'ACTIVE_SATELLITE');
     const hazardWrappers = wrappers.filter((w) => w.record.classification === 'DEBRIS' || w.record.classification === 'ROCKET_BODY');
@@ -325,7 +667,7 @@ export function detectConjunctions(
       const offsetH = baseOffsets[idx];
       const missKm = baseMissDists[idx];
 
-      const tcaDate = new Date(startDate.getTime() + offsetH * 3600 * 1000);
+      const tcaDate = new Date(startMs + offsetH * 3600 * 1000);
       const ptA = propagateAtTime(wA, tcaDate);
       const ptB = propagateAtTime(wB, tcaDate);
       const relVel = Math.max(7.2, calculateRelativeVelocity(ptA.velocity, ptB.velocity));
@@ -354,7 +696,8 @@ export function detectConjunctions(
 
   // Sort descending by risk score
   events.sort((a, b) => b.riskScore - a.riskScore);
-  console.log(`[Conjunction Engine] Analysis complete. Found ${events.length} conjunction candidates.`);
+  const totalTimeS = ((Date.now() - perfStart) / 1000).toFixed(1);
+  console.log(`[Conjunction Engine] Complete in ${totalTimeS}s. Found ${events.length} conjunction events.`);
   return events;
 }
 
