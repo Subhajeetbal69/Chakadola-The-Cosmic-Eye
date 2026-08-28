@@ -8,7 +8,11 @@ import { EARTH_RADIUS } from '../../utils/orbitalMath';
  * Uses MeshPhongMaterial with onBeforeCompile to inject night lights into the
  * standard Phong shader on the dark hemisphere.
  */
-export function RealisticEarth() {
+interface RealisticEarthProps {
+  simSpeedMultiplier?: number;
+}
+
+export function RealisticEarth({ simSpeedMultiplier = 60 }: RealisticEarthProps) {
   const earthRef = useRef<THREE.Mesh>(null);
   const cloudsRef = useRef<THREE.Mesh>(null);
   const atmosphereRef = useRef<THREE.Mesh>(null);
@@ -91,15 +95,22 @@ export function RealisticEarth() {
     return mat;
   }, [colorMap, bumpMap, specularMap, nightMap, sunDirection]);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
+    const dt = Math.min(delta, 0.1);
+    // Dynamic Earth rotation that is clearly visible at 1x and scales up visibly with the speedometer (30x, 60x, 150x)
+    const baseVisualRate = 0.015; // rad/sec baseline at 1x (~0.86 deg/s)
+    const speedFactor = 1 + (simSpeedMultiplier - 1) * 0.35;
+    const earthRotationDelta = baseVisualRate * speedFactor * dt;
+    const cloudsRotationDelta = earthRotationDelta * 1.15; // subtle differential atmospheric drift
+
     if (earthRef.current) {
-      earthRef.current.rotation.y += 0.0003;
+      earthRef.current.rotation.y += earthRotationDelta;
     }
     if (cloudsRef.current) {
-      cloudsRef.current.rotation.y += 0.00045;
+      cloudsRef.current.rotation.y += cloudsRotationDelta;
     }
     if (atmosphereRef.current) {
-      atmosphereRef.current.rotation.y += 0.0003;
+      atmosphereRef.current.rotation.y += earthRotationDelta;
     }
   });
 
@@ -140,3 +151,4 @@ export function RealisticEarth() {
 }
 
 export default RealisticEarth;
+

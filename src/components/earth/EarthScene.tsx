@@ -111,7 +111,7 @@ export function EarthScene({
       {/* Realistic Earth & Live Orbital Trajectory System */}
       <group>
         <Suspense fallback={null}>
-          <RealisticEarth />
+          <RealisticEarth simSpeedMultiplier={simSpeedMultiplier} />
         </Suspense>
         <OrbitalSystem 
           objects={objects}
