@@ -4,6 +4,8 @@ import http from 'http';
 import path from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import * as satellite from 'satellite.js';
 import {
   TleRecord,
@@ -40,6 +42,46 @@ let activeConfig: SystemConfig = { ...DEFAULT_CONFIG };
 let activeSource = 'Curated Reference Fleet (Offline)';
 let lastAnalysisDate: Date = new Date();
 let wss: WebSocketServer | null = null;
+
+// ── In-Memory Security & Concurrency Guards ───────────────────────
+let activeAnalysisPromise: Promise<ConjunctionEvent[]> | null = null;
+let activeTleFetchPromise: Promise<any> | null = null;
+const aiAssessmentCache = new Map<string, { data: any; expiresAt: number }>();
+
+async function executeSafeConjunctionDetection(): Promise<ConjunctionEvent[]> {
+  if (activeAnalysisPromise) {
+    return activeAnalysisPromise;
+  }
+  activeAnalysisPromise = (async () => {
+    try {
+      lastAnalysisDate = new Date();
+      currentConjunctions = detectConjunctions(currentTles, activeConfig, lastAnalysisDate);
+      return currentConjunctions;
+    } finally {
+      activeAnalysisPromise = null;
+    }
+  })();
+  return activeAnalysisPromise;
+}
+
+async function executeSafeLiveTleFetch(): Promise<any> {
+  if (activeTleFetchPromise) {
+    return activeTleFetchPromise;
+  }
+  activeTleFetchPromise = (async () => {
+    try {
+      const result = await fetchLiveTleData();
+      currentTles = result.records;
+      activeSource = result.source;
+      refreshSatrecCache();
+      await executeSafeConjunctionDetection();
+      return result;
+    } finally {
+      activeTleFetchPromise = null;
+    }
+  })();
+  return activeTleFetchPromise;
+}
 
 // In-memory cache of satrec wrappers for instant propagation
 let cachedSatrecWrappers: Array<{ record: TleRecord; wrapper: any }> = [];
@@ -188,13 +230,50 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  // ── 1. HTTP Security Headers & Payload Size Clamping ─────────────
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+    })
+  );
+  app.use(express.json({ limit: '32kb' }));
+
+  // ── 2. Layer 7 Rate Limiting Defenses ────────────────────────────
+  // General API Rate Limiter: max 240 requests/min per IP
+  const apiGeneralLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 240,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: 'Too many requests. Please slow down.' }
+  });
+  app.use('/api/', apiGeneralLimiter);
+
+  // Heavy Computation Rate Limiter: max 12 requests/min per IP for CPU/DB/AI intensive routes
+  const heavyComputationLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 12,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: 'Computation rate limit exceeded. Please wait before retrying.' }
+  });
+  app.use('/api/tle/fetch', heavyComputationLimiter);
+  app.use('/api/tle/demo', heavyComputationLimiter);
+  app.use('/api/analyze', heavyComputationLimiter);
+  app.use('/api/conjunctions/:id/assess', heavyComputationLimiter);
+  app.use('/api/conjunctions/csv', heavyComputationLimiter);
 
   // Initialize DB and astrodynamics engine
   await initCoreEngine();
 
   // Create HTTP server for both Express and WebSockets
   const server = http.createServer(app);
+
+  // ── 3. Slowloris & Request Timeout Hardening ──────────────────────
+  server.headersTimeout = 15000;  // 15 seconds max to receive complete HTTP headers
+  server.requestTimeout = 30000;  // 30 seconds max for entire HTTP request processing
+  server.keepAliveTimeout = 10000; // 10 seconds idle keep-alive timeout
 
   server.on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {
@@ -205,14 +284,46 @@ async function startServer() {
     }
   });
 
-  // Initialize WebSocket Server with explicit upgrade routing
-  wss = new WebSocketServer({ noServer: true });
+  // ── 4. WebSocket Server & DDoS Shielding ──────────────────────────
+  const wsIpConnectionCounts = new Map<string, number>();
+
+  wss = new WebSocketServer({ 
+    noServer: true,
+    maxPayload: 32 * 1024 // 32 KB maximum payload per message to prevent buffer exhaustion
+  });
 
   server.on('upgrade', (request, socket, head) => {
     try {
       const url = new URL(request.url || '', `http://${request.headers.host || 'localhost'}`);
       if (url.pathname === '/ws' || url.pathname.startsWith('/ws')) {
+        const rawIp = (request.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || request.socket.remoteAddress || '127.0.0.1';
+        const currentCount = wsIpConnectionCounts.get(rawIp) || 0;
+
+        // Limit to 25 concurrent WebSocket connections per IP address
+        if (currentCount >= 25) {
+          console.warn(`[WebSocket Guard] Blocked excessive concurrent connection attempt from IP: ${rawIp}`);
+          socket.write('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n');
+          socket.destroy();
+          return;
+        }
+
+        wsIpConnectionCounts.set(rawIp, currentCount + 1);
+
         wss?.handleUpgrade(request, socket, head, (ws) => {
+          (ws as any).clientIp = rawIp;
+          (ws as any).isAlive = true;
+          (ws as any).msgCount = 0;
+          (ws as any).lastMsgReset = Date.now();
+
+          ws.on('close', () => {
+            const count = wsIpConnectionCounts.get(rawIp) || 1;
+            if (count <= 1) {
+              wsIpConnectionCounts.delete(rawIp);
+            } else {
+              wsIpConnectionCounts.set(rawIp, count - 1);
+            }
+          });
+
           wss?.emit('connection', ws, request);
         });
       }
@@ -238,8 +349,25 @@ async function startServer() {
       console.error('[WebSocket] Failed sending initial state:', err);
     }
 
+    ws.on('pong', () => {
+      (ws as any).isAlive = true;
+    });
+
     ws.on('message', async (messageData) => {
       try {
+        // Per-socket message rate limiting: max 15 messages/sec per client
+        const now = Date.now();
+        const socketState = ws as any;
+        if (now - (socketState.lastMsgReset || 0) > 1000) {
+          socketState.msgCount = 0;
+          socketState.lastMsgReset = now;
+        }
+        socketState.msgCount = (socketState.msgCount || 0) + 1;
+        if (socketState.msgCount > 15) {
+          ws.send(JSON.stringify({ type: 'error', message: 'WebSocket message rate limit exceeded.' }));
+          return;
+        }
+
         const text = messageData.toString();
         const msg = JSON.parse(text);
 
@@ -249,12 +377,7 @@ async function startServer() {
         }
 
         if (msg.action === 'fetch_live') {
-          const result = await fetchLiveTleData();
-          currentTles = result.records;
-          activeSource = result.source;
-          refreshSatrecCache();
-          lastAnalysisDate = new Date();
-          currentConjunctions = detectConjunctions(currentTles, activeConfig, lastAnalysisDate);
+          await executeSafeLiveTleFetch();
 
           broadcastWsMessage({
             type: 'conjunction_update',
@@ -274,8 +397,7 @@ async function startServer() {
           await saveTleRecords(currentTles);
           await setMetadata('active_source', activeSource);
 
-          lastAnalysisDate = new Date();
-          currentConjunctions = detectConjunctions(currentTles, activeConfig, lastAnalysisDate);
+          await executeSafeConjunctionDetection();
 
           broadcastWsMessage({
             type: 'conjunction_update',
@@ -288,8 +410,7 @@ async function startServer() {
         }
 
         if (msg.action === 'reanalyze') {
-          lastAnalysisDate = new Date();
-          currentConjunctions = detectConjunctions(currentTles, activeConfig, lastAnalysisDate);
+          await executeSafeConjunctionDetection();
 
           broadcastWsMessage({
             type: 'conjunction_update',
@@ -314,6 +435,21 @@ async function startServer() {
       console.warn('[WebSocket] Connection error:', err);
     });
   });
+
+  // ── 5. Zombie Connection Reaper (Every 30s Heartbeat) ──────────────
+  const heartbeatInterval = setInterval(() => {
+    if (!wss) return;
+    for (const ws of wss.clients) {
+      const client = ws as any;
+      if (client.isAlive === false) {
+        console.log(`[WebSocket Guard] Terminating inactive zombie socket from ${client.clientIp || 'unknown'}`);
+        client.terminate();
+        continue;
+      }
+      client.isAlive = false;
+      client.ping();
+    }
+  }, 30000);
 
   // Continuous High-Frequency Telemetry Stream Broadcast Loop (Every 500ms)
   let streamOffset = 0;
@@ -360,12 +496,7 @@ async function startServer() {
 
   app.get('/api/tle/fetch', async (req, res) => {
     try {
-      const result = await fetchLiveTleData();
-      currentTles = result.records;
-      activeSource = result.source;
-      refreshSatrecCache();
-      lastAnalysisDate = new Date();
-      currentConjunctions = detectConjunctions(currentTles, activeConfig, lastAnalysisDate);
+      const result = await executeSafeLiveTleFetch();
 
       // Broadcast update over WebSocket to all active subscribers
       broadcastWsMessage({
@@ -710,26 +841,29 @@ async function startServer() {
     }
   });
 
-  app.post('/api/analyze', (req, res) => {
-    lastAnalysisDate = new Date();
-    currentConjunctions = detectConjunctions(currentTles, activeConfig, lastAnalysisDate);
+  app.post('/api/analyze', async (req, res) => {
+    try {
+      await executeSafeConjunctionDetection();
 
-    broadcastWsMessage({
-      type: 'conjunction_update',
-      status: getSystemStatus(),
-      objects: getObjectsSummaries(lastAnalysisDate),
-      conjunctions: currentConjunctions,
-      timestamp: Date.now()
-    });
+      broadcastWsMessage({
+        type: 'conjunction_update',
+        status: getSystemStatus(),
+        objects: getObjectsSummaries(lastAnalysisDate),
+        conjunctions: currentConjunctions,
+        timestamp: Date.now()
+      });
 
-    res.json({
-      success: true,
-      conjunctionsCount: currentConjunctions.length,
-      analyzedAt: lastAnalysisDate.toISOString()
-    });
+      res.json({
+        success: true,
+        conjunctionsCount: currentConjunctions.length,
+        analyzedAt: lastAnalysisDate.toISOString()
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err?.message || 'Analysis error' });
+    }
   });
 
-  // POST /api/conjunctions/:id/assess - Returns structured Gemini AI assessment
+  // POST /api/conjunctions/:id/assess - Returns structured Gemini AI assessment with 15-minute TTL cache
   app.post('/api/conjunctions/:id/assess', async (req, res) => {
     const { id } = req.params;
     const conj = currentConjunctions.find((c) => c.id === id);
@@ -737,8 +871,17 @@ async function startServer() {
       return res.status(404).json({ error: 'Conjunction event not found' });
     }
 
+    const cached = aiAssessmentCache.get(id);
+    if (cached && Date.now() < cached.expiresAt) {
+      return res.json({ ...cached.data, isCached: true });
+    }
+
     try {
       const result = await getConjunctionAssessment(conj, currentTles);
+      aiAssessmentCache.set(id, {
+        data: result,
+        expiresAt: Date.now() + 15 * 60 * 1000 // 15-minute cache
+      });
       res.json(result);
     } catch (err: any) {
       console.error('[API /conjunctions/:id/assess Error]', err);
