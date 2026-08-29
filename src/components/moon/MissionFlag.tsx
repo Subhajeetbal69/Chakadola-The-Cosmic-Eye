@@ -28,11 +28,13 @@ function Flag({ position, color, emissiveColor, label, route, className }: FlagP
   const [hovered, setHovered] = useState(false);
   const [interactive, setInteractive] = useState(false);
 
-  const handleClick = useCallback(() => {
-    if (interactive) {
-      navigate(route);
+  const handleClick = useCallback((e?: any) => {
+    if (e) {
+      e.stopPropagation?.();
+      e.preventDefault?.();
     }
-  }, [interactive, navigate, route]);
+    navigate(route);
+  }, [navigate, route]);
 
   // Generate a procedural fabric bump map
   const fabricBump = useMemo(() => {
@@ -45,10 +47,12 @@ function Flag({ position, color, emissiveColor, label, route, className }: FlagP
     const progress = missionState.smoothProgress;
     const time = clock.getElapsedTime();
 
-    // Interactive when scroll > 0.82
-    const isInteractive = progress > 0.82;
-    setInteractive(isInteractive);
-    missionState.flagsInteractive = isInteractive;
+    // Interactive when scroll > 0.80
+    const isInteractive = progress > 0.80;
+    if (isInteractive !== interactive) {
+      setInteractive(isInteractive);
+      missionState.flagsInteractive = isInteractive;
+    }
 
     // Flag visibility (fade in from 0.70)
     if (groupRef.current) {
@@ -138,13 +142,14 @@ function Flag({ position, color, emissiveColor, label, route, className }: FlagP
 
       {/* Interactive HTML button label */}
       {interactive && (
-        <Html center position={[0.3, 3.1, 0]} distanceFactor={10}>
+        <Html center position={[0.3, 3.1, 0]} distanceFactor={10} zIndexRange={[100, 0]} style={{ pointerEvents: 'auto' }}>
           <button
             className={`flag-label ${className}`}
             onClick={handleClick}
+            onPointerDown={handleClick}
             onMouseEnter={() => setHovered(true)}
             onMouseLeave={() => setHovered(false)}
-            style={{ cursor: 'pointer' }}
+            style={{ cursor: 'pointer', pointerEvents: 'auto' }}
           >
             {label}
           </button>

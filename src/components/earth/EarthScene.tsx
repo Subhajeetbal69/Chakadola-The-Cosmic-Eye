@@ -21,11 +21,33 @@ interface EarthSceneProps {
 }
 
 function CameraController({ zoomAction }: { zoomAction?: ZoomAction | null }) {
-  const { camera } = useThree();
+  const { camera, size } = useThree();
   const controlsRef = useRef<any>(null);
+  const initialAdjusted = useRef(false);
+  const lastExecutedTimestamp = useRef<number>(0);
 
   useEffect(() => {
-    if (!zoomAction) return;
+    if (!initialAdjusted.current) {
+      const aspect = size.width / Math.max(1, size.height);
+      if (aspect < 1.0) {
+        // Mobile portrait: pull camera back smoothly so Earth and full LEO/GEO orbits fit inside viewport
+        const dist = 26 * Math.min(1.7, 1.0 / aspect);
+        camera.position.set(0, 6 * (dist / 26), dist);
+        camera.updateProjectionMatrix();
+        if (controlsRef.current) {
+          controlsRef.current.update();
+        }
+      }
+      initialAdjusted.current = true;
+    }
+  }, [size, camera]);
+
+  useEffect(() => {
+    // Only execute when a NEW zoomAction timestamp is received to prevent continuous looping
+    if (!zoomAction || !zoomAction.timestamp || zoomAction.timestamp <= lastExecutedTimestamp.current) {
+      return;
+    }
+    lastExecutedTimestamp.current = zoomAction.timestamp;
 
     if (zoomAction.type === 'IN') {
       const currentDist = camera.position.length();
@@ -36,19 +58,21 @@ function CameraController({ zoomAction }: { zoomAction?: ZoomAction | null }) {
       }
     } else if (zoomAction.type === 'OUT') {
       const currentDist = camera.position.length();
-      const newDist = Math.min(220, currentDist * 1.35);
+      const newDist = Math.min(260, currentDist * 1.35);
       camera.position.setLength(newDist);
       if (controlsRef.current) {
         controlsRef.current.update();
       }
     } else if (zoomAction.type === 'RESET') {
-      camera.position.set(0, 6, 26);
+      const aspect = size.width / Math.max(1, size.height);
+      const defaultDist = aspect < 1.0 ? 26 * Math.min(1.7, 1.0 / aspect) : 26;
+      camera.position.set(0, 6 * (defaultDist / 26), defaultDist);
       if (controlsRef.current) {
         controlsRef.current.target.set(0, 0, 0);
         controlsRef.current.update();
       }
     }
-  }, [zoomAction, camera]);
+  }, [zoomAction, camera, size]);
 
   return (
     <OrbitControls
@@ -56,7 +80,7 @@ function CameraController({ zoomAction }: { zoomAction?: ZoomAction | null }) {
       enablePan={false}
       enableZoom={true}
       minDistance={11.5}
-      maxDistance={250}
+      maxDistance={280}
       dampingFactor={0.05}
       enableDamping={true}
       rotateSpeed={0.5}
@@ -79,10 +103,15 @@ export function EarthScene({
   return (
     <Canvas
       camera={{ position: [0, 6, 26], fov: 45, near: 0.1, far: 3000 }}
+      dpr={[1, typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 2) : 1]}
       onCreated={() => {
         if (onLoaded) onLoaded();
       }}
-      gl={{ antialias: true, logarithmicDepthBuffer: true }}
+      gl={{
+        antialias: true,
+        logarithmicDepthBuffer: true,
+        powerPreference: 'high-performance'
+      }}
     >
       <color attach="background" args={['#05050a']} />
       
@@ -105,7 +134,6 @@ export function EarthScene({
         position={[50, 10, -20]}
         intensity={2.8}
         color="#ffffff"
-        castShadow
       />
 
       {/* Realistic Earth & Live Orbital Trajectory System */}

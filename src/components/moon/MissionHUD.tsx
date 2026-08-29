@@ -104,7 +104,7 @@ export function MissionHUD() {
       </div>
 
       {/* ── Right Side: Vertical Scroll Track Indicator (Image 2) ── */}
-      <div className="fixed top-1/2 -translate-y-1/2 right-8 z-30 pointer-events-none h-48 w-0.5 bg-white/10 rounded-full flex flex-col justify-start">
+      <div className="fixed top-1/2 -translate-y-1/2 right-4 sm:right-8 z-30 pointer-events-none h-48 w-0.5 bg-white/10 rounded-full hidden sm:flex flex-col justify-start">
         <div
           className="w-2.5 h-2.5 -ml-1 rounded-full bg-cyan-400 shadow-[0_0_10px_#00e5ff] transition-all duration-75"
           style={{

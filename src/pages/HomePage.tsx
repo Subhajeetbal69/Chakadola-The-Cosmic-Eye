@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Link } from 'react-router-dom';
+import * as THREE from 'three';
 import ScrollController from '../components/moon/ScrollController';
 import MoonScene from '../components/moon/MoonScene';
 import MissionHUD from '../components/moon/MissionHUD';
@@ -33,9 +34,9 @@ function SectionText() {
         const fadeOut = Math.min(1, (0.22 - p) / 0.03);
         setOpacity(Math.min(fadeIn, fadeOut));
         setBlurPx(0);
-      } else if (p > 0.88 && p < 1.0) {
+      } else if (p > 0.86 && p <= 1.0) {
         setCurrentSection('final');
-        const fadeIn = Math.min(1, (p - 0.88) / 0.04);
+        const fadeIn = Math.min(1, (p - 0.86) / 0.04);
         setOpacity(fadeIn);
         setBlurPx(0);
       } else {
@@ -83,12 +84,30 @@ function SectionText() {
       </div>
     ),
     final: (
-      <div className="section-text center" style={{ opacity }}>
-        <div className="discovery-title" style={{ fontSize: 'clamp(0.7rem, 1.5vw, 1rem)' }}>
+      <div className="section-text center pointer-events-none" style={{ opacity }}>
+        <div className="discovery-title" style={{ fontSize: 'clamp(0.75rem, 1.8vw, 1.15rem)' }}>
           MISSION DISCOVERY
         </div>
-        <div className="discovery-subtitle">
-          Choose your destination
+        <div className="discovery-subtitle text-xs text-slate-400 mt-1">
+          Choose your mission destination
+        </div>
+        <div className="flex items-center justify-center gap-3 mt-4 flex-wrap pointer-events-auto">
+          <Link
+            to="/earth"
+            className="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 bg-cyan-600/90 hover:bg-cyan-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)] border border-cyan-400/50 backdrop-blur-xl transition-all cursor-pointer"
+            title="Explore 3D Earth tracking and orbital space debris"
+          >
+            <Globe className="w-4 h-4 text-cyan-200" />
+            <span>Explore Earth</span>
+          </Link>
+          <Link
+            to="/alert"
+            className="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 bg-red-600/90 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)] border border-red-400/50 backdrop-blur-xl transition-all cursor-pointer"
+            title="View critical conjunction warnings and collision avoidance"
+          >
+            <ShieldAlert className="w-4 h-4 text-red-200" />
+            <span>View Alerts</span>
+          </Link>
         </div>
       </div>
     ),
@@ -134,15 +153,15 @@ function HomeNavbar() {
   const conjCount = conjunctions.length;
 
   return (
-    <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 pointer-events-auto flex items-center gap-2 p-1.5 bg-slate-900/70 border border-white/15 rounded-2xl shadow-2xl backdrop-blur-xl">
-      <div className="flex items-center gap-2 px-3 py-1 text-xs font-mono font-bold text-cyan-400 border-r border-white/10">
+    <div className="fixed top-3 sm:top-5 left-1/2 -translate-x-1/2 z-50 pointer-events-auto flex items-center gap-1 sm:gap-2 p-1 sm:p-1.5 bg-slate-900/80 border border-white/15 rounded-2xl shadow-2xl backdrop-blur-xl max-w-[96vw]">
+      <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 text-[11px] sm:text-xs font-mono font-bold text-cyan-400 border-r border-white/10">
         <Radio className="w-3.5 h-3.5 animate-pulse text-cyan-400" />
         <span className="hidden sm:inline">MISSION 01</span>
       </div>
 
       <Link
         to="/earth"
-        className="px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 bg-white/5 hover:bg-cyan-600/30 hover:border-cyan-400/50 border border-transparent text-slate-200 hover:text-white transition-all cursor-pointer"
+        className="px-2.5 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 bg-white/5 hover:bg-cyan-600/30 hover:border-cyan-400/50 border border-transparent text-slate-200 hover:text-white transition-all cursor-pointer whitespace-nowrap"
         title="View 3D & 2D Earth satellite and space debris tracking"
       >
         <Globe className="w-3.5 h-3.5 text-cyan-400" />
@@ -151,19 +170,19 @@ function HomeNavbar() {
 
       <Link
         to="/alert"
-        className="px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 bg-white/5 hover:bg-red-600/30 hover:border-red-400/50 border border-transparent text-slate-200 hover:text-white transition-all cursor-pointer relative"
+        className="px-2.5 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 bg-white/5 hover:bg-red-600/30 hover:border-red-400/50 border border-transparent text-slate-200 hover:text-white transition-all cursor-pointer relative whitespace-nowrap"
         title="View conjunction warnings and AI collision avoidance center"
       >
         <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
         <span>Alert Center</span>
         {conjCount > 0 && (
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-red-500 text-white animate-pulse">
+          <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-bold bg-red-500 text-white animate-pulse">
             {conjCount}
           </span>
         )}
       </Link>
 
-      <div className="hidden md:flex items-center gap-1.5 pl-2 pr-1 border-l border-white/10 text-[10px] font-mono text-slate-400">
+      <div className="hidden lg:flex items-center gap-1.5 pl-2 pr-1 border-l border-white/10 text-[10px] font-mono text-slate-400">
         <span className={`w-2 h-2 rounded-full ${isWsConnected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
         <span>{isWsConnected ? 'LIVE FEED' : 'READY'}</span>
       </div>
@@ -183,7 +202,7 @@ export function HomePage() {
       {/* Fixed 3D Canvas */}
       <div className="canvas-container">
         <Canvas
-          shadows
+          shadows={{ type: THREE.PCFShadowMap }}
           dpr={[1, 2]}
           camera={{ position: [0, 4.2, 8.5], fov: 48, near: 0.1, far: 1000 }}
           gl={{

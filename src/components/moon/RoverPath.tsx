@@ -12,10 +12,10 @@ export const CRATER_POSITIONS = [
   { x: 12, z: -55, radius: 8, depth: 2.2 },    // Crater 2 — second discovery
 ];
 
-// Flag positions (at the end of the journey)
+// Flag positions (at the end of the journey — framed closely to rover for mobile & desktop visibility)
 export const FLAG_POSITIONS = {
-  earth: { x: -3, z: -82 },
-  alert: { x: 3, z: -82 },
+  earth: { x: -1.5, z: -82.2 },
+  alert: { x: 1.5, z: -82.2 },
 };
 
 // Path control points — rover goes OVER/THROUGH the craters

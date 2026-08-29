@@ -368,6 +368,47 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
     }
   };
 
+  const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.touches.length === 0) return;
+    const touch = e.touches[0];
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const touchX = touch.clientX - rect.left;
+    const touchY = touch.clientY - rect.top;
+
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const currentZoom = zoomRef.current;
+    const currentPan = panRef.current;
+    const originX = centerX + currentPan.x;
+    const originY = centerY + currentPan.y;
+    const scale = (Math.min(rect.width, rect.height) / (2 * VIEW_RADIUS_KM)) * currentZoom;
+
+    let found: TrackedObjectSummary | null = null;
+    const currentSimStep = simTimeStepRef.current;
+    if (Array.isArray(objects)) {
+      for (const obj of objects) {
+        if (!obj) continue;
+        const sampleIdx = currentSimStep % (obj.orbitSample?.length || 1);
+        const rawPt = obj.currentPosition || obj.positionKm;
+        const pt = obj.orbitSample && obj.orbitSample[sampleIdx] ? obj.orbitSample[sampleIdx] : rawPt;
+        if (!pt) continue;
+        let px = 0, py = 0;
+        if (plane === 'XY') { px = originX + pt.x * scale; py = originY - pt.y * scale; }
+        else if (plane === 'XZ') { px = originX + pt.x * scale; py = originY - pt.z * scale; }
+        else { px = originX + pt.y * scale; py = originY - pt.z * scale; }
+        const dist = Math.hypot(touchX - px, touchY - py);
+        if (dist < 18) { found = obj; break; }
+      }
+    }
+    setHoveredObject(found);
+    setTooltipPos(found ? { x: touchX, y: touchY } : null);
+    if (found && onSelectObject) {
+      onSelectObject(found);
+    }
+  };
+
   const handleResetTime = () => {
     simTimeStepRef.current = 0;
     setClockDisplay(0);
@@ -379,100 +420,113 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
 
   return (
     <div id="orbit-2d-panel" className="w-full h-full bg-slate-950/80 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col relative">
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-        <div className="bg-slate-900/80 backdrop-blur-xl px-4 py-2 border border-white/10 rounded-2xl flex items-center gap-4 text-xs shadow-2xl">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 bg-[#00ff66] rounded-full shadow-[0_0_8px_#00ff66]"></span>
-            <span className="text-[11px] font-mono font-bold tracking-wider text-slate-200">SATELLITES ({activeCount})</span>
+      {/* ── Top Responsive Controls Bar (Zero Overlap Guaranteed) ── */}
+      <div className="absolute top-2 sm:top-3 inset-x-2 sm:inset-x-3 z-10 flex flex-wrap items-center justify-between gap-1.5 pointer-events-none">
+        {/* Left: Classification Object Breakdown */}
+        <div className="pointer-events-auto bg-slate-900/90 backdrop-blur-xl px-2 sm:px-3 py-1 sm:py-1.5 border border-white/10 rounded-xl flex items-center gap-2 sm:gap-3 text-xs shadow-2xl shrink-0">
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-[#00ff66] shadow-[0_0_6px_#00ff66]" />
+            <span className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-200">
+              <span className="hidden sm:inline">SATS </span>{activeCount}
+            </span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 bg-[#ff2244] rounded-full shadow-[0_0_8px_#ff2244]"></span>
-            <span className="text-[11px] font-mono font-bold tracking-wider text-slate-200">DEBRIS ({debrisCount})</span>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-[#ff2244] shadow-[0_0_6px_#ff2244]" />
+            <span className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-200">
+              <span className="hidden sm:inline">DEBRIS </span>{debrisCount}
+            </span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 bg-[#00d4ff] rounded-full shadow-[0_0_8px_#00d4ff]"></span>
-            <span className="text-[11px] font-mono font-bold tracking-wider text-slate-200">R/B ({rbCount})</span>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-[#00d4ff] shadow-[0_0_6px_#00d4ff]" />
+            <span className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-200">
+              <span className="hidden sm:inline">R/B </span>{rbCount}
+            </span>
           </div>
         </div>
-      </div>
 
-      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-        <div className="bg-slate-900/80 backdrop-blur-xl p-1.5 border border-white/10 rounded-2xl flex items-center gap-1.5 shadow-2xl">
-          <div className="flex items-center gap-1 px-1 border-r border-white/10">
-            <Compass className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="text-[10px] font-mono font-bold text-slate-400 mr-1">PLANE:</span>
+        {/* Right: Plane Switcher & Zoom Buttons */}
+        <div className="pointer-events-auto bg-slate-900/90 backdrop-blur-xl p-1 sm:p-1.5 border border-white/10 rounded-xl flex items-center gap-1 sm:gap-1.5 shadow-2xl shrink-0">
+          <div className="flex items-center gap-0.5 sm:gap-1 px-1 border-r border-white/10">
+            <Compass className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-cyan-400 shrink-0" />
+            <span className="hidden lg:inline text-[10px] font-mono font-bold text-slate-400 mr-0.5">PLANE:</span>
             {(['XY', 'XZ', 'YZ'] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => setPlane(p)}
-                className={`px-2.5 py-1 rounded-xl font-mono text-[10px] font-bold transition-all cursor-pointer ${
-                  plane === p ? 'bg-cyan-500 text-slate-950 font-black shadow-[0_0_10px_rgba(6,182,212,0.6)]' : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
+                className={`px-1.5 sm:px-2 py-0.5 rounded-lg font-mono text-[9px] sm:text-[10px] font-bold transition-all cursor-pointer ${
+                  plane === p ? 'bg-cyan-500 text-slate-950 font-black shadow-[0_0_8px_rgba(6,182,212,0.5)]' : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
                 }`}
               >
                 {p}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1 pl-1">
-            <button onClick={() => { targetZoomRef.current = Math.min(4.0, targetZoomRef.current + 0.3); setZoomDisplay(Number(targetZoomRef.current.toFixed(1))); }} className="p-1 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer" title="Zoom in">
-              <ZoomIn className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-0.5 sm:gap-1 pl-0.5">
+            <button onClick={() => { targetZoomRef.current = Math.min(4.0, targetZoomRef.current + 0.3); setZoomDisplay(Number(targetZoomRef.current.toFixed(1))); }} className="p-0.5 sm:p-1 rounded hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer" title="Zoom in">
+              <ZoomIn className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </button>
-            <span className="font-mono text-[11px] font-bold text-cyan-400 min-w-[36px] text-center">{(zoomDisplay * 100).toFixed(0)}%</span>
-            <button onClick={() => { targetZoomRef.current = Math.max(0.5, targetZoomRef.current - 0.3); setZoomDisplay(Number(targetZoomRef.current.toFixed(1))); }} className="p-1 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer" title="Zoom out">
-              <ZoomOut className="w-3.5 h-3.5" />
+            <span className="font-mono text-[9px] sm:text-[10px] font-bold text-cyan-400 min-w-[24px] sm:min-w-[30px] text-center">{(zoomDisplay * 100).toFixed(0)}%</span>
+            <button onClick={() => { targetZoomRef.current = Math.max(0.5, targetZoomRef.current - 0.3); setZoomDisplay(Number(targetZoomRef.current.toFixed(1))); }} className="p-0.5 sm:p-1 rounded hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer" title="Zoom out">
+              <ZoomOut className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
             </button>
           </div>
         </div>
       </div>
 
-      <div className="relative flex-1 w-full min-h-[480px]">
+      <div className="relative flex-1 w-full min-h-[340px] sm:min-h-[460px]">
         {syncState && syncState.isActive && selectedConjunction && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-slate-950/95 backdrop-blur-md border border-cyan-500/60 px-4 py-1.5 rounded-xl shadow-[0_0_25px_rgba(6,182,212,0.3)] flex items-center gap-2.5 text-xs font-mono">
-            <div className="flex items-center gap-1.5 text-cyan-300 font-bold">
-              <Focus className="w-4 h-4 text-cyan-400 animate-pulse" />
-              <span>SYNC ZOOM: TCA PROJECTION</span>
+          <div className="absolute top-12 sm:top-14 left-1/2 -translate-x-1/2 z-20 bg-slate-950/95 backdrop-blur-md border border-cyan-500/60 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.3)] flex items-center gap-1.5 text-xs font-mono max-w-[92vw]">
+            <div className="flex items-center gap-1 text-cyan-300 font-bold">
+              <Focus className="w-3 h-3 text-cyan-400 animate-pulse" />
+              <span className="text-[10px] sm:text-xs">TCA SYNC</span>
             </div>
-            <div className="flex items-center gap-1.5 text-slate-300 text-[11px] border-l border-white/10 pl-2">
-              <span className="text-red-400 font-bold bg-red-950/70 border border-red-500/40 px-1.5 py-0.5 rounded text-[10px]">{selectedConjunction.minDistanceKm.toFixed(2)} km</span>
+            <div className="flex items-center gap-1 text-slate-300 text-[9px] sm:text-[10px] border-l border-white/10 pl-1.5">
+              <span className="text-red-400 font-bold bg-red-950/70 border border-red-500/40 px-1 py-0.2 rounded">{selectedConjunction.minDistanceKm.toFixed(2)} km</span>
             </div>
             {onResetSync && (
-              <button onClick={onResetSync} className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white text-[10px] font-sans transition-colors border border-white/10 cursor-pointer">Reset</button>
+              <button onClick={onResetSync} className="px-1 py-0.2 rounded bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white text-[9px] font-sans transition-colors border border-white/10 cursor-pointer">Reset</button>
             )}
           </div>
         )}
-        <canvas ref={canvasRef} onMouseMove={handleMouseMove} onClick={handleCanvasClick} onMouseLeave={() => { setHoveredObject(null); setTooltipPos(null); }} className="w-full h-full block cursor-crosshair" />
+        <canvas
+          ref={canvasRef}
+          onMouseMove={handleMouseMove}
+          onClick={handleCanvasClick}
+          onTouchStart={handleTouchStart}
+          onMouseLeave={() => { setHoveredObject(null); setTooltipPos(null); }}
+          className="w-full h-full block cursor-crosshair touch-none"
+        />
         {hoveredObject && tooltipPos && (
-          <div className="absolute z-30 pointer-events-none bg-slate-900/95 backdrop-blur-2xl border border-white/20 p-3.5 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.8)] text-xs font-mono text-slate-200" style={{ left: Math.min(tooltipPos.x + 18, 560), top: Math.min(tooltipPos.y + 18, 380) }}>
-            <div className="font-bold text-white text-sm mb-1 flex items-center gap-2">
-              <span>{hoveredObject.name}</span>
-              <span className={`w-2 h-2 rounded-full ${hoveredObject.classification === 'DEBRIS' ? 'bg-[#ff2244]' : hoveredObject.classification === 'ROCKET_BODY' ? 'bg-[#00d4ff]' : 'bg-[#00ff66]'}`} />
+          <div className="absolute z-30 pointer-events-none bg-slate-900/95 backdrop-blur-2xl border border-white/20 p-2.5 sm:p-3.5 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.8)] text-xs font-mono text-slate-200 max-w-[260px] sm:max-w-none" style={{ left: Math.min(tooltipPos.x + 12, window.innerWidth - 280), top: Math.max(10, Math.min(tooltipPos.y + 12, 380)) }}>
+            <div className="font-bold text-white text-xs sm:text-sm mb-1 flex items-center gap-1.5">
+              <span className="truncate">{hoveredObject.name}</span>
+              <span className={`w-2 h-2 shrink-0 rounded-full ${hoveredObject.classification === 'DEBRIS' ? 'bg-[#ff2244]' : hoveredObject.classification === 'ROCKET_BODY' ? 'bg-[#00d4ff]' : 'bg-[#00ff66]'}`} />
             </div>
-            <div className="text-slate-400 text-[11px]">NORAD ID: #{hoveredObject.noradId}</div>
-            <div className="text-slate-400 text-[11px]">Type: {hoveredObject.classification}</div>
-            <div className="text-cyan-400 text-[11px] mt-1 font-semibold">Altitude: {(hoveredObject.altitudeKm ?? 0).toFixed(1)} km</div>
-            <div className="text-slate-400 text-[11px]">Speed: {(hoveredObject.speedKmS ?? 0).toFixed(2)} km/s</div>
-            <div className="text-[10px] text-slate-500 mt-1 italic">Click to inspect full dossier</div>
+            <div className="text-slate-400 text-[10px] sm:text-[11px]">NORAD ID: #{hoveredObject.noradId}</div>
+            <div className="text-slate-400 text-[10px] sm:text-[11px]">Type: {hoveredObject.classification}</div>
+            <div className="text-cyan-400 text-[10px] sm:text-[11px] mt-0.5 font-semibold">Altitude: {(hoveredObject.altitudeKm ?? 0).toFixed(1)} km</div>
+            <div className="text-slate-400 text-[10px] sm:text-[11px]">Speed: {(hoveredObject.speedKmS ?? 0).toFixed(2)} km/s</div>
           </div>
         )}
       </div>
 
-      <div className="p-3.5 bg-slate-900/80 backdrop-blur-2xl border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setIsPlaying(!isPlaying)} className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-all flex items-center gap-2 cursor-pointer">
-            {isPlaying ? <Pause className="w-3.5 h-3.5 text-cyan-400" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}
-            <span className="text-[11px] font-mono font-bold">{isPlaying ? 'PAUSE SIM' : 'PLAY SIM'}</span>
+      <div className="p-2 sm:p-3 bg-slate-900/90 backdrop-blur-2xl border-t border-white/10 flex flex-wrap items-center justify-between gap-1.5 text-xs">
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => setIsPlaying(!isPlaying)} className="px-2 sm:px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-all flex items-center gap-1 cursor-pointer">
+            {isPlaying ? <Pause className="w-3 h-3 text-cyan-400" /> : <Play className="w-3 h-3 text-emerald-400" />}
+            <span className="text-[9px] sm:text-[10px] font-mono font-bold">{isPlaying ? 'PAUSE' : 'PLAY'}</span>
           </button>
-          <button onClick={handleResetTime} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all cursor-pointer" title="Reset to T0">
-            <RotateCcw className="w-3.5 h-3.5" />
+          <button onClick={handleResetTime} className="p-1 sm:p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all cursor-pointer" title="Reset to T0">
+            <RotateCcw className="w-3 h-3" />
           </button>
-          <div className="flex items-center gap-2 text-xs text-slate-300 font-mono bg-black/40 px-3 py-1.5 rounded-xl border border-white/10">
-            <Clock className="w-3.5 h-3.5 text-cyan-400" />
+          <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-slate-300 font-mono bg-black/40 px-2 py-1 rounded-lg border border-white/10">
+            <Clock className="w-3 h-3 text-cyan-400" />
             <span>T+ <strong className="text-cyan-300">{Math.floor(clockDisplay / 60)}h {(clockDisplay % 60).toString().padStart(2, '0')}m</strong></span>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-[11px] font-mono text-slate-400 bg-white/5 px-3 py-1.5 rounded-xl border border-white/10">
-            FRAME: <strong className="text-slate-200">ECI (TEME)</strong> &nbsp;|&nbsp; PROJECTION: <strong className="text-cyan-400">{plane}-PLANE</strong>
+        <div className="flex items-center gap-1.5">
+          <div className="text-[9px] sm:text-[10px] font-mono text-slate-400 bg-white/5 px-2 py-1 rounded-lg border border-white/10">
+            FRAME: <strong className="text-slate-200">ECI</strong> &nbsp;|&nbsp; <strong className="text-cyan-400">{plane}-PLANE</strong>
           </div>
         </div>
       </div>

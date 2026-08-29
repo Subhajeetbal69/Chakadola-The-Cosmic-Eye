@@ -10,22 +10,45 @@
   html, body {
     width: 100%;
     min-height: 100%;
+    min-height: 100dvh;
     overflow-x: hidden;
     background-color: #0a0a0f;
     color: #e0e0e8;
-    font-family: 'Rajdhani', sans-serif;
+    font-family: 'Rajdhani', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
   #root {
     width: 100%;
     min-height: 100%;
+    min-height: 100dvh;
+  }
+
+  /* Universal Cross-Browser Smooth Scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 120, 180, 0.3) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: rgba(100, 120, 180, 0.3);
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 229, 255, 0.5);
   }
 }
 
-/* ── Design Tokens ─────────────────────────────────── */
+/* ── Design Tokens & Responsive Insets ─────────────────── */
 :root {
   --color-bg: #0a0a0f;
   --color-surface: rgba(20, 22, 35, 0.65);
@@ -50,17 +73,26 @@
   --transition-fast: 0.2s ease;
   --transition-normal: 0.4s ease;
   --transition-slow: 0.8s ease;
+
+  /* Safe Area Insets for Mobile Notches & Dynamic Islands */
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
 }
 
-/* ── Canvas Container ──────────────────────────────── */
+/* ── Canvas Container (Full Responsive Viewport) ──────── */
 .canvas-container {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
+  width: 100dvw;
   height: 100vh;
+  height: 100dvh;
   z-index: 1;
   pointer-events: none;
+  touch-action: none;
 }
 
 /* ── Scroll Spacer ─────────────────────────────────── */
@@ -353,9 +385,8 @@
   text-transform: uppercase;
 }
 
-/* ── Flag Interaction ──────────────────────────────── */
 .flag-label {
-  pointer-events: auto;
+  pointer-events: auto !important;
   cursor: pointer;
   padding: 0.6rem 1.2rem;
   background: var(--color-surface);
@@ -370,6 +401,9 @@
   text-decoration: none;
   transition: all var(--transition-fast);
   white-space: nowrap;
+  user-select: none;
+  position: relative;
+  z-index: 100;
 }
 
 .flag-label:hover {

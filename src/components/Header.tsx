@@ -79,29 +79,29 @@ export const Header: React.FC<HeaderProps> = ({
   const conjCount = status?.detectedConjunctionsCount ?? 0;
 
   return (
-    <header id="dashboard-header" className="bg-slate-900/90 border-b border-white/10 text-slate-100 px-4 sm:px-6 py-3.5 sticky top-0 z-30 backdrop-blur-2xl">
-      <div className="max-w-7xl mx-auto flex flex-col gap-3.5">
+    <header id="dashboard-header" className="bg-slate-900/95 border-b border-white/10 text-slate-100 px-3 sm:px-6 py-2 sm:py-3.5 sticky top-0 z-30 backdrop-blur-2xl">
+      <div className="max-w-7xl mx-auto flex flex-col gap-2.5 sm:gap-3">
         
         {/* Top Row: Brand, Global Navigation, & High-Res Clock */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5">
           <div className="flex flex-col">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="text-[10px] tracking-[0.25em] text-cyan-400 font-bold uppercase flex items-center gap-1.5 font-mono">
-                <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-                Continuous Astrodynamics Stream
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <span className="text-[9px] sm:text-[10px] tracking-[0.2em] sm:tracking-[0.25em] text-cyan-400 font-bold uppercase flex items-center gap-1 font-mono">
+                <Radio className="w-3 h-3 text-cyan-400 animate-pulse" />
+                <span className="hidden sm:inline">Continuous</span> Astrodynamics Stream
               </span>
 
               {/* Real-time Telemetry Stream Status Badge */}
-              <span className={`text-[10px] uppercase font-mono px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${
+              <span className={`text-[9px] sm:text-[10px] uppercase font-mono px-2 py-0.5 rounded-full border flex items-center gap-1.5 ${
                 isWsConnected
                   ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
                   : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
               }`} title={isWsConnected ? 'WebSocket continuously streaming live telemetry packets' : 'Continuous real-time astrodynamics stream active'}>
-                <span className={`w-2 h-2 rounded-full ${isWsConnected ? 'bg-emerald-400 animate-ping' : 'bg-cyan-400 animate-pulse'}`} />
-                <span>{isWsConnected ? `WS STREAMING ${wsLatency !== null ? `(${wsLatency}ms)` : ''}` : 'LIVE STREAMING (ACTIVE)'}</span>
+                <span className={`w-1.5 h-1.5 rounded-full ${isWsConnected ? 'bg-emerald-400 animate-ping' : 'bg-cyan-400 animate-pulse'}`} />
+                <span>{isWsConnected ? `WS ${wsLatency !== null ? `(${wsLatency}ms)` : 'LIVE'}` : 'STREAMING'}</span>
               </span>
 
-              <span className={`text-[10px] uppercase font-mono px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${
+              <span className={`hidden sm:flex text-[9px] sm:text-[10px] uppercase font-mono px-2 py-0.5 rounded-full border items-center gap-1.5 ${
                 isLive
                   ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
                   : isDemo
@@ -113,64 +113,64 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             </div>
 
-            <h1 className="text-xl sm:text-2xl font-light tracking-tight mt-1 text-white flex items-center gap-2">
+            <h1 className="text-base sm:text-xl font-light tracking-tight mt-0.5 text-white flex items-center gap-1.5">
               SPACE DEBRIS <span className="text-cyan-400 font-semibold">& ROCKET BODY TRACKER</span>
             </h1>
           </div>
 
           {/* Navigation Tabs (Home, Earth, Alert) */}
-          <nav className="flex items-center gap-1.5 p-1 bg-slate-950/80 border border-white/10 rounded-2xl shadow-inner backdrop-blur-xl">
-            <NavLink
-              to="/"
-              className={({ isActive }) =>
-                `px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`
-              }
-            >
-              <Compass className="w-4 h-4 text-blue-400" />
-              <span>Mission Control</span>
-            </NavLink>
+          <div className="flex items-center justify-between sm:justify-start gap-2">
+            <nav className="flex items-center gap-1 p-1 bg-slate-950/80 border border-white/10 rounded-2xl shadow-inner backdrop-blur-xl overflow-x-auto no-scrollbar w-full sm:w-auto justify-around sm:justify-start">
+              <NavLink
+                to="/"
+                className={({ isActive }) =>
+                  `px-2.5 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`
+                }
+              >
+                <Compass className="w-3.5 h-3.5 text-blue-400" />
+                <span>Mission Control</span>
+              </NavLink>
 
-            <NavLink
-              to="/earth"
-              className={({ isActive }) =>
-                `px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer ${
-                  isActive
-                    ? 'bg-cyan-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)]'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`
-              }
-            >
-              <Globe className="w-4 h-4 text-cyan-400" />
-              <span>Earth Tracking</span>
-            </NavLink>
+              <NavLink
+                to="/earth"
+                className={({ isActive }) =>
+                  `px-2.5 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    isActive
+                      ? 'bg-cyan-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)]'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`
+                }
+              >
+                <Globe className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Earth Tracking</span>
+              </NavLink>
 
-            <NavLink
-              to="/alert"
-              className={({ isActive }) =>
-                `px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer relative ${
-                  isActive
-                    ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`
-              }
-            >
-              <ShieldAlert className="w-4 h-4 text-red-400" />
-              <span>Alert Center</span>
-              {conjCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-red-500 text-white animate-pulse">
-                  {conjCount}
-                </span>
-              )}
-            </NavLink>
-          </nav>
+              <NavLink
+                to="/alert"
+                className={({ isActive }) =>
+                  `px-2.5 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer relative whitespace-nowrap ${
+                    isActive
+                      ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`
+                }
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+                <span>Alert Center</span>
+                {conjCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-bold bg-red-500 text-white animate-pulse">
+                    {conjCount}
+                  </span>
+                )}
+              </NavLink>
+            </nav>
 
-          {/* Real-time Clock & Breakdown */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2 bg-slate-950/80 px-3 py-1.5 rounded-xl border border-cyan-500/30 shadow-inner">
+            {/* Real-time Clock on Desktop */}
+            <div className="hidden lg:flex items-center gap-2 bg-slate-950/80 px-3 py-1.5 rounded-xl border border-cyan-500/30 shadow-inner">
               <Clock className="w-3.5 h-3.5 text-cyan-400 animate-spin" style={{ animationDuration: '6s' }} />
               <div className="flex flex-col">
                 <span className="text-[9px] uppercase tracking-widest text-slate-400 font-mono font-bold">Real-time Clock</span>
@@ -179,78 +179,64 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </div>
             </div>
-
-            <div className="hidden sm:flex items-center gap-1.5 bg-slate-950/60 p-1 rounded-xl border border-white/10">
-              <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[10px] font-mono text-blue-300" title="Active Satellites">
-                <Satellite className="w-3 h-3 text-blue-400" />
-                <span>{satsCount} Sat</span>
-              </div>
-              <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-red-500/10 border border-red-500/20 text-[10px] font-mono text-red-300" title="Space Debris">
-                <Trash2 className="w-3 h-3 text-red-400" />
-                <span>{debrisCount} Debris</span>
-              </div>
-              <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[10px] font-mono text-amber-300" title="Rocket Bodies">
-                <Rocket className="w-3 h-3 text-amber-400" />
-                <span>{rbCount} R/B</span>
-              </div>
-            </div>
           </div>
         </div>
 
         {/* Bottom Row: Quick Telemetry Metrics & Action Buttons */}
-        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 pt-1 border-t border-white/5">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 flex-1 max-w-4xl">
-            <div id="metric-tracked-objects" className="bg-slate-950/50 border border-white/10 rounded-xl p-2 flex flex-col justify-between shadow-md">
+        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 pt-1 border-t border-white/5">
+          {/* Scrollable metrics row on mobile */}
+          <div className="flex xl:grid xl:grid-cols-4 gap-2 overflow-x-auto no-scrollbar py-0.5 flex-1 max-w-full xl:max-w-4xl">
+            <div id="metric-tracked-objects" className="bg-slate-950/60 border border-white/10 rounded-xl p-2 flex flex-col justify-between shadow-md shrink-0 min-w-[125px] xl:min-w-0">
               <span className="block text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Tracked Objects</span>
-              <div className="flex items-baseline justify-between mt-1">
-                <span className="text-base font-mono font-bold leading-none text-white">{status?.trackedObjectsCount ?? 0}</span>
-                <span className="text-[9px] font-mono text-cyan-400 font-bold">Curated Set</span>
+              <div className="flex items-baseline justify-between mt-0.5">
+                <span className="text-sm sm:text-base font-mono font-bold leading-none text-white">{status?.trackedObjectsCount ?? 0}</span>
+                <span className="text-[8px] sm:text-[9px] font-mono text-cyan-400 font-bold">Curated Set</span>
               </div>
             </div>
 
-            <div id="metric-conjunctions" className={`rounded-xl p-2 flex flex-col justify-between shadow-md border ${
+            <div id="metric-conjunctions" className={`rounded-xl p-2 flex flex-col justify-between shadow-md border shrink-0 min-w-[125px] xl:min-w-0 ${
               conjCount > 0
                 ? 'bg-red-950/30 border-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.15)]'
-                : 'bg-slate-950/50 border-white/10'
+                : 'bg-slate-950/60 border-white/10'
             }`}>
               <span className="block text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Conjunction Alerts</span>
-              <div className="flex items-baseline justify-between mt-1">
-                <span className={`text-base font-mono font-bold leading-none ${conjCount > 0 ? 'text-red-400' : 'text-white'}`}>
+              <div className="flex items-baseline justify-between mt-0.5">
+                <span className={`text-sm sm:text-base font-mono font-bold leading-none ${conjCount > 0 ? 'text-red-400' : 'text-white'}`}>
                   {conjCount}
                 </span>
-                <span className="text-[9px] font-mono text-red-400/80 font-bold">&lt;{status?.config?.distanceThresholdKm || 15}km</span>
+                <span className="text-[8px] sm:text-[9px] font-mono text-red-400/80 font-bold">&lt;{status?.config?.distanceThresholdKm || 15}km</span>
               </div>
             </div>
 
-            <div id="metric-analysis-window" className="bg-slate-950/50 border border-white/10 rounded-xl p-2 flex flex-col justify-between shadow-md">
+            <div id="metric-analysis-window" className="bg-slate-950/60 border border-white/10 rounded-xl p-2 flex flex-col justify-between shadow-md shrink-0 min-w-[120px] xl:min-w-0">
               <span className="block text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Prop. Window</span>
-              <div className="flex items-baseline justify-between mt-1">
-                <span className="text-base font-mono font-bold leading-none text-white">{status?.analysisWindowHours ?? 24}h</span>
-                <span className="text-[9px] font-mono text-slate-400 font-bold">@{status?.timeStepSeconds ?? 60}s</span>
+              <div className="flex items-baseline justify-between mt-0.5">
+                <span className="text-sm sm:text-base font-mono font-bold leading-none text-white">{status?.analysisWindowHours ?? 24}h</span>
+                <span className="text-[8px] sm:text-[9px] font-mono text-slate-400 font-bold">@{status?.timeStepSeconds ?? 60}s</span>
               </div>
             </div>
 
-            <div id="metric-last-update" className="bg-slate-950/50 border border-white/10 rounded-xl p-2 flex flex-col justify-between shadow-md">
+            <div id="metric-last-update" className="bg-slate-950/60 border border-white/10 rounded-xl p-2 flex flex-col justify-between shadow-md shrink-0 min-w-[130px] xl:min-w-0">
               <span className="block text-[9px] text-slate-400 uppercase tracking-wider font-semibold">CelesTrak Sync</span>
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
-                <span className="text-[11px] font-mono font-bold text-emerald-400 truncate">
+              <div className="flex items-center gap-1 mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                <span className="text-[10px] sm:text-[11px] font-mono font-bold text-emerald-400 truncate">
                   {formatTime(status?.lastDataUpdate)}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Action Controls */}
-          <div className="flex items-center flex-wrap gap-2 shrink-0">
+          {/* Action Controls in a neat scrollable row on mobile */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 py-0.5">
             <button
               id="btn-fetch-celestrak"
               onClick={onFetchLive}
               disabled={isLoading}
-              className="px-3.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center gap-2 transition-all disabled:opacity-50 shadow-[0_0_15px_rgba(6,182,212,0.35)] border border-cyan-400/40 cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[11px] sm:text-xs flex items-center gap-1.5 transition-all disabled:opacity-50 shadow-[0_0_15px_rgba(6,182,212,0.35)] border border-cyan-400/40 cursor-pointer whitespace-nowrap"
               title="Synchronize live TLE orbital elements from CelesTrak"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
               <span>Sync CelesTrak</span>
             </button>
 
@@ -258,10 +244,10 @@ export const Header: React.FC<HeaderProps> = ({
               id="btn-load-demo"
               onClick={onLoadDemo}
               disabled={isLoading}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-white/10 font-semibold text-xs flex items-center gap-2 transition-all disabled:opacity-50 shadow-md backdrop-blur-md cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-white/10 font-semibold text-[11px] sm:text-xs flex items-center gap-1.5 transition-all disabled:opacity-50 shadow-md backdrop-blur-md cursor-pointer whitespace-nowrap"
               title="Load deterministic conjunction demonstration scenario"
             >
-              <PlayCircle className="w-3.5 h-3.5 text-purple-400" />
+              <PlayCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-400" />
               <span>Demo Scenario</span>
             </button>
 
@@ -269,11 +255,11 @@ export const Header: React.FC<HeaderProps> = ({
               id="btn-reanalyze"
               onClick={onReAnalyze}
               disabled={isLoading}
-              className="px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-white/10 font-semibold text-xs flex items-center gap-1.5 transition-all disabled:opacity-50 backdrop-blur-md cursor-pointer"
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-white/10 font-semibold text-[11px] sm:text-xs flex items-center gap-1.5 transition-all disabled:opacity-50 backdrop-blur-md cursor-pointer whitespace-nowrap"
               title="Recalculate trajectories and pairwise conjunctions"
             >
-              <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Re-Scan</span>
+              <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-400" />
+              <span>Re-Scan</span>
             </button>
 
             <button
@@ -282,7 +268,7 @@ export const Header: React.FC<HeaderProps> = ({
               className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-white/10 text-xs transition-all backdrop-blur-md cursor-pointer"
               title="Configuration & Risk Weights"
             >
-              <Sliders className="w-4 h-4" />
+              <Sliders className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
 
             <button
@@ -291,11 +277,10 @@ export const Header: React.FC<HeaderProps> = ({
               className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-white/10 text-xs transition-all backdrop-blur-md cursor-pointer"
               title="System Architecture & Astrodynamics Spec"
             >
-              <BookOpen className="w-4 h-4" />
+              <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           </div>
         </div>
-
       </div>
     </header>
   );
