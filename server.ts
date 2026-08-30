@@ -1020,52 +1020,78 @@ async function startServer() {
     }
   });
 
-  // POST /api/conjunctions/:id/assess - Returns structured Gemini AI assessment with 15-minute TTL cache
-  app.post('/api/conjunctions/:id/assess', async (req, res) => {
+  // Handler for Conjunction AI Assessment (Gemini API)
+  const handleConjunctionAssessment = async (req: express.Request, res: express.Response) => {
     const { id } = req.params;
-    const conj = currentConjunctions.find((c) => c.id === id);
+    const forceRefresh = req.body?.forceRefresh === true || req.query?.force === 'true';
+    let conj = currentConjunctions.find((c) => c.id === id);
+    if (!conj && req.body?.conjunction) {
+      conj = req.body.conjunction;
+    }
     if (!conj) {
-      return res.status(404).json({ error: 'Conjunction event not found' });
+      return res.status(404).json({ error: `Conjunction event ${id} not found in active tracking registry.` });
     }
 
-    const cached = aiAssessmentCache.get(id);
-    if (cached && Date.now() < cached.expiresAt) {
-      return res.json({ ...cached.data, isCached: true });
+    if (forceRefresh) {
+      console.log(`[Gemini API] 🔄 Force refresh requested for conjunction ${id}. Evicting cache.`);
+      aiAssessmentCache.delete(id);
+    } else {
+      const cached = aiAssessmentCache.get(id);
+      if (cached && Date.now() < cached.expiresAt) {
+        console.log(`[Gemini API] ⚡ Returning cached assessment for ${id} (TTL remaining: ${Math.round((cached.expiresAt - Date.now()) / 1000)}s)`);
+        return res.json({ ...cached.data, isCached: true });
+      }
     }
 
     try {
+      console.log(`[Gemini API] 🚀 Dispatching live Gemini API assessment for ${id} (${conj.objectA?.name} vs ${conj.objectB?.name})...`);
+      const startTime = Date.now();
       const result = await getConjunctionAssessment(conj, currentTles);
+      const elapsedMs = Date.now() - startTime;
+      console.log(`[Gemini API] ✅ Live assessment completed in ${elapsedMs}ms for ${id}. Status: ${result.assessment?.status || 'DONE'}`);
+      
       aiAssessmentCache.set(id, {
         data: result,
         expiresAt: Date.now() + 15 * 60 * 1000 // 15-minute cache
       });
-      res.json(result);
+      res.json({ ...result, isCached: false });
     } catch (err: any) {
-      console.error('[API /conjunctions/:id/assess Error]', err);
+      console.error('[Gemini API Error] Failed generating conjunction assessment:', err);
       res.status(500).json({ error: err?.message || 'Failed generating AI assessment' });
     }
-  });
+  };
+
+  // POST & GET /api/conjunctions/:id/assess - Returns structured Gemini AI assessment
+  app.post('/api/conjunctions/:id/assess', handleConjunctionAssessment);
+  app.get('/api/conjunctions/:id/assess', handleConjunctionAssessment);
 
   // POST /api/conjunctions/:id/simulate - Runs local physics-based maneuver simulation
   app.post('/api/conjunctions/:id/simulate', (req, res) => {
     const { id } = req.params;
-    const { burnDirection, burnMagnitudeMs, burnTimeHoursBeforeTca } = req.body;
+    const { burnDirection, burnMagnitudeMs, burnTimeHoursBeforeTca, conjunction } = req.body || {};
 
-    const conj = currentConjunctions.find((c) => c.id === id);
+    let conj = currentConjunctions.find((c) => c.id === id);
+    if (!conj && conjunction) {
+      conj = conjunction;
+    }
     if (!conj) {
       return res.status(404).json({ error: 'Conjunction event not found' });
     }
 
     try {
+      const parsedMagnitude = burnMagnitudeMs !== undefined && !isNaN(Number(burnMagnitudeMs)) ? Number(burnMagnitudeMs) : 5.0;
+      const parsedTime = burnTimeHoursBeforeTca !== undefined && !isNaN(Number(burnTimeHoursBeforeTca)) ? Number(burnTimeHoursBeforeTca) : 12.0;
+
       const result = simulateManeuver(
         conj,
         currentTles,
-        burnDirection,
-        Number(burnMagnitudeMs),
-        Number(burnTimeHoursBeforeTca)
+        burnDirection || 'PROGRADE',
+        parsedMagnitude,
+        parsedTime
       );
       res.json(result);
     } catch (err: any) {
+      console.error('[Simulation Error]', err);
       res.status(400).json({ error: err?.message || 'Failed running maneuver simulation' });
     }
   });

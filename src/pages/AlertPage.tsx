@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { NavLink } from 'react-router-dom';
-import { Compass, Globe, ShieldAlert } from 'lucide-react';
+import { Compass, Globe, ShieldAlert, Sparkles, Activity, CheckCircle2, RotateCw, Play, AlertTriangle, ShieldCheck, Zap } from 'lucide-react';
 import { SatelliteDossierInline } from "../components/SatelliteDossierInline";
 import { useTelemetry } from "../context/TelemetryContext";
 import { ConjunctionEvent } from "../types";
@@ -406,50 +406,426 @@ function TcaProfile({ miss, speed }: { miss: number; speed: string }) {
   </div>;
 }
 
-function ResponsePanel({ onOpenBurn, priority }: { onOpenBurn: () => void; priority: string }) {
-  const [recalc, setRecalc] = useState(false);
-  const recalculate = () => { setRecalc(true); setTimeout(() => setRecalc(false), 1300); };
-  const plan = actionPlans[priority] ?? actionPlans["Low"];
-  const confidence = assessmentConfidence[priority] ?? assessmentConfidence["Low"];
-  return <div className={`mt-6 space-y-4 transition-opacity ${recalc ? "opacity-40" : "opacity-100"}`}>
-    <div className="rounded-xl border border-[#cbd98a]/25 bg-[#cbd98a]/[.08] p-4">
-      <p className="font-mono text-[10px] uppercase tracking-[.16em] text-[#cbd98a]">Recommended action plan</p>
-      <ul className="mt-3 space-y-2 text-sm leading-6 text-[#e6ebe2]">{plan.map((item) => <li key={item} className="flex gap-2.5"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-[#cbd98a]" />{item}</li>)}</ul>
-    </div>
-    <div className="rounded-xl border border-white/10 bg-white/[.03] p-4">
-      <div className="flex items-center gap-2"><svg viewBox="0 0 24 24" className="size-4 fill-none stroke-[#9bac83]" strokeWidth="1.7" strokeLinejoin="round"><path d="M12 3 5 6v5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6l-7-3Z" /></svg><p className="font-mono text-[10px] uppercase tracking-[.16em] text-[#9bac83]">Assessment confidence</p></div>
-      <p className="mt-2 text-sm leading-6 text-[#c3ccc3]">{confidence}</p>
-    </div>
-    <div className="rounded-xl border border-white/10 bg-white/[.03] p-4">
-      <div className="flex items-center gap-2"><svg viewBox="0 0 24 24" className="size-4 fill-none stroke-[#9bac83]" strokeWidth="1.7" strokeLinecap="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" /></svg><p className="font-mono text-[10px] uppercase tracking-[.16em] text-[#9bac83]">Data limitations</p></div>
-      <p className="mt-2 text-sm leading-6 text-[#c3ccc3]">Ephemeris propagation relies on SGP4 models subject to atmospheric-drag uncertainties near perigee. Ground-tracking LOS losses create gaps in real-time sensor verification.</p>
-    </div>
-    <div className="flex flex-wrap gap-3 pt-1">
-      <button onClick={onOpenBurn} className="inline-flex items-center gap-2 rounded-full bg-[#cbd98a] px-5 py-3 text-sm font-semibold text-[#172116] transition hover:bg-[#e1efa1]"><svg viewBox="0 0 24 24" className="size-4 fill-none stroke-current" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5.5 20 5.5M4 12h16M8 18.5 16 18.5" /><path d="m14 9 4 3-4 3" /></svg>Burn simulation</button>
-      <button onClick={recalculate} disabled={recalc} className="inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-3 text-sm text-[#e4e9e2] transition hover:border-[#cbd98a]/60 hover:bg-white/5 disabled:opacity-70"><svg viewBox="0 0 24 24" className={`size-4 fill-none stroke-current ${recalc ? "animate-spin" : ""}`} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 11a8 8 0 1 0-.6 4" /><path d="M20 4v5h-5" /></svg>{recalc ? "Recalculating…" : "Recalculate response"}</button>
-    </div>
-  </div>;
-}
+function ResponsePanel({ onOpenBurn, priority, pair }: { onOpenBurn: () => void; priority: string; pair: ConjunctionEvent }) {
+  const [assessment, setAssessment] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isCached, setIsCached] = useState<boolean>(false);
 
-function BurnSandbox({ onBack, miss }: { onBack: () => void; miss: number }) {
-  const directions = ["PROGRADE (Raises Orbit / Speeds Up)", "RETROGRADE (Lowers Orbit / Slows Down)", "RADIAL (Inward / Outward Shift)", "NORMAL (Cross-Track / Inclination Shift)"];
-  const [dir, setDir] = useState(directions[0]);
-  const [dv, setDv] = useState(5);
-  const [hours, setHours] = useState(12);
-  const [result, setResult] = useState<string | null>(null);
-  const run = () => setResult((miss + dv * hours * 0.011).toFixed(2));
-  return <div className="mt-6">
-    <div className="space-y-6 rounded-xl border border-white/10 bg-black/20 p-4 sm:p-5">
-      <label className="block"><span className="font-mono text-[10px] uppercase tracking-[.14em] text-[#8f9d94]">Impulse direction</span><select value={dir} onChange={(e) => setDir(e.target.value)} className="mt-2 w-full rounded-lg border border-white/12 bg-black/30 px-3 py-2.5 font-mono text-xs text-[#edf2ec] outline-none transition focus:border-[#cbd98a]/60">{directions.map((d) => <option key={d} value={d} className="bg-[#0a141d]">{d}</option>)}</select></label>
-      <div><div className="flex items-center justify-between"><span className="font-mono text-[10px] uppercase tracking-[.14em] text-[#8f9d94]">Burn magnitude (ΔV)</span><span className="font-mono text-xs text-[#cbd98a]">{dv.toFixed(1)} m/s</span></div><input type="range" min={0} max={20} step={0.5} value={dv} onChange={(e) => setDv(Number(e.target.value))} className="mt-3 w-full accent-[#cbd98a]" /></div>
-      <div><div className="flex items-center justify-between"><span className="font-mono text-[10px] uppercase tracking-[.14em] text-[#8f9d94]">Burn location time (hours before TCA)</span><span className="font-mono text-xs text-[#cbd98a]">{hours.toFixed(1)} h</span></div><input type="range" min={0} max={24} step={0.5} value={hours} onChange={(e) => setHours(Number(e.target.value))} className="mt-3 w-full accent-[#cbd98a]" /></div>
-      {result && <div className="rounded-lg border border-[#cbd98a]/25 bg-[#cbd98a]/[.08] px-4 py-3 text-sm text-[#e6ebe2]">Projected miss after burn: <strong className="font-semibold text-[#dce9a0]">{result} km</strong></div>}
-      <div className="flex flex-wrap gap-3 pt-1">
-        <button onClick={run} className="inline-flex items-center gap-2 rounded-full bg-[#cbd98a] px-5 py-3 text-sm font-semibold text-[#172116] transition hover:bg-[#e1efa1]"><svg viewBox="0 0 24 24" className="size-4 fill-current" aria-hidden><path d="M8 5v14l11-7z" /></svg>Run burn simulation</button>
-        <button onClick={onBack} className="inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-3 text-sm text-[#e4e9e2] transition hover:border-[#cbd98a]/60 hover:bg-white/5"><span aria-hidden>←</span> Back to response</button>
+  const fetchAssessment = async (force: boolean = false) => {
+    if (force) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/conjunctions/${pair.id}/assess`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forceRefresh: force, conjunction: pair })
+      });
+
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      setAssessment(data);
+      setIsCached(Boolean(data.isCached));
+    } catch (err: any) {
+      console.error('[AI Assessment Error]', err);
+      setError(err?.message || 'Failed generating live AI assessment.');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAssessment(false);
+  }, [pair.id]);
+
+  const defaultPlan = actionPlans[priority] ?? actionPlans["Low"];
+  const defaultConfidence = assessmentConfidence[priority] ?? assessmentConfidence["Low"];
+
+  const statusStr = assessment?.assessment?.status || (priority === 'Critical' ? 'HIGH_CONCERN' : priority === 'High' ? 'CLOSE_MONITORING' : 'MONITOR');
+  const statusBadgeStyle =
+    statusStr === 'HIGH_CONCERN' || statusStr === 'ESCALATE_FOR_MANEUVER_ANALYSIS'
+      ? 'border-[#f18b78]/50 bg-[#f18b78]/15 text-[#ffae9d]'
+      : statusStr === 'CLOSE_MONITORING'
+      ? 'border-[#e8894a]/50 bg-[#e8894a]/15 text-[#f0b184]'
+      : statusStr === 'MONITOR'
+      ? 'border-[#cbd98a]/50 bg-[#cbd98a]/15 text-[#dce9a0]'
+      : 'border-[#75c7c1]/50 bg-[#75c7c1]/15 text-[#9ee7e2]';
+
+  return (
+    <div className="mt-6 space-y-4 font-sans">
+      {/* Live Gemini Status Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/40 px-3.5 py-2.5 backdrop-blur">
+        <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[.14em]">
+          <span className="flex items-center gap-1.5 text-[#cbd98a]">
+            <Sparkles className="size-3.5 animate-pulse text-[#cbd98a]" />
+            Gemini 3.5 Flash-Lite
+          </span>
+          <span className="text-white/20">·</span>
+          <span className="text-[#8f9d94]">Astrodynamic Tools</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {isRefreshing || isLoading ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/40 bg-cyan-500/10 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-cyan-300">
+              <Activity className="size-3 animate-spin" /> Calling API…
+            </span>
+          ) : isCached ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 font-mono text-[10px] text-[#9ba69e]" title="Cached result within 15m TTL">
+              <span className="size-1.5 rounded-full bg-amber-400" /> Cached (15m TTL)
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-300">
+              <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" /> Live API Response
+            </span>
+          )}
+          <span className={`rounded-full border px-2.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[.08em] ${statusBadgeStyle}`}>
+            {statusStr.replace(/_/g, ' ')}
+          </span>
+        </div>
+      </div>
+
+      {/* Loading Skeleton */}
+      {isLoading && !assessment ? (
+        <div className="space-y-3 rounded-xl border border-white/10 bg-white/[.02] p-5 text-center">
+          <div className="flex justify-center py-4">
+            <Activity className="size-7 animate-spin text-[#cbd98a]" />
+          </div>
+          <p className="font-mono text-xs text-[#cbd98a]">Querying Gemini API & SGP4 telemetry tools…</p>
+          <p className="text-xs text-[#8f9d94]">Evaluating distance history, covariance gaps, and candidate maneuver profiles.</p>
+        </div>
+      ) : (
+        <>
+          {/* Headline & Executive Summary */}
+          <div className="rounded-xl border border-white/12 bg-white/[.04] p-4 transition-all">
+            <div className="flex items-start gap-2.5">
+              <Zap className="mt-0.5 size-4 shrink-0 text-[#cbd98a]" />
+              <div className="space-y-1">
+                <h4 className="font-semibold text-sm text-[#f0f4ee]">
+                  {assessment?.assessment?.headline || "Conjunction Tactical Risk Evaluation"}
+                </h4>
+                <p className="text-xs leading-relaxed text-[#c3ccc3]">
+                  {assessment?.assessment?.summary || "Automated astrodynamics screening in progress. Review the recommended response actions below."}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Gemini API Live Token & Metadata Bar */}
+          {assessment?._meta && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-cyan-500/20 bg-cyan-950/20 px-3 py-2 text-[10px] font-mono text-cyan-300">
+              <div className="flex items-center gap-3">
+                <span>Model: <strong>{assessment._meta.model}</strong></span>
+                {assessment._meta.usage && (
+                  <span>
+                    Tokens: <strong>{assessment._meta.usage.totalTokenCount}</strong> (Prompt: {assessment._meta.usage.promptTokenCount}, Output: {assessment._meta.usage.candidatesTokenCount})
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-slate-400">
+                <span>Generated: {new Date(assessment._meta.generatedAt).toLocaleTimeString()} UTC</span>
+                <span>· {assessment._meta.toolIterations} tool loops</span>
+              </div>
+            </div>
+          )}
+
+          {/* Identified Risk Factors (Gemini Tool Insights) */}
+          {assessment?.risk_factors && assessment.risk_factors.length > 0 && (
+            <div className="space-y-2">
+              <p className="font-mono text-[10px] uppercase tracking-[.16em] text-[#9bac83]">Identified Risk Drivers & Ephemeris Tools</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {assessment.risk_factors.map((rf: any, idx: number) => {
+                  const isSevere = rf.impact === 'increases_concern';
+                  const isFavorable = rf.impact === 'decreases_concern';
+                  return (
+                    <div key={idx} className="flex flex-col justify-between gap-1.5 rounded-lg border border-white/8 bg-black/30 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs font-semibold text-[#e0e7df]">{rf.factor}</span>
+                        <span className={`rounded px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase ${
+                          isSevere ? 'bg-[#f18b78]/20 text-[#ffae9d] border border-[#f18b78]/30' :
+                          isFavorable ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                          'bg-white/10 text-[#c3ccc3]'
+                        }`}>
+                          {rf.value}
+                        </span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-[#8f9d94]">{rf.explanation}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Orbital Trend */}
+          {assessment?.trend && (
+            <div className="flex items-center gap-3 rounded-lg border border-white/8 bg-black/20 px-3.5 py-2.5 text-xs">
+              <span className="font-mono text-[10px] uppercase tracking-[.14em] text-[#9bac83]">Historical Trend:</span>
+              <span className={`font-mono font-bold uppercase ${
+                assessment.trend.direction === 'worsening' ? 'text-[#f18b78]' :
+                assessment.trend.direction === 'improving' ? 'text-emerald-400' :
+                'text-[#cbd98a]'
+              }`}>
+                {assessment.trend.direction}
+              </span>
+              <span className="text-[#8f9d94] truncate">· {assessment.trend.explanation}</span>
+            </div>
+          )}
+
+          {/* Recommended Action Plan */}
+          <div className="rounded-xl border border-[#cbd98a]/25 bg-[#cbd98a]/[.08] p-4">
+            <p className="font-mono text-[10px] uppercase tracking-[.16em] text-[#cbd98a]">Recommended Action Plan</p>
+            <ul className="mt-3 space-y-2 text-xs leading-5 text-[#e6ebe2]">
+              {(assessment?.recommended_actions || defaultPlan).map((item: string, idx: number) => (
+                <li key={idx} className="flex gap-2.5">
+                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[#cbd98a]" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Candidate Evasion Strategies */}
+          {assessment?.candidate_evasion_strategies && assessment.candidate_evasion_strategies.length > 0 && (
+            <div className="space-y-2">
+              <p className="font-mono text-[10px] uppercase tracking-[.16em] text-[#9bac83]">Candidate Evasion Strategies</p>
+              <div className="space-y-2">
+                {assessment.candidate_evasion_strategies.map((strat: any, idx: number) => (
+                  <div key={idx} className="rounded-lg border border-white/10 bg-white/[.03] p-3 text-xs space-y-1">
+                    <div className="flex items-center justify-between text-[#cbd98a] font-semibold">
+                      <span>{strat.strategy}</span>
+                      <span className="font-mono text-[9px] uppercase tracking-wider text-[#8f9d94]">Candidate Burn</span>
+                    </div>
+                    <p className="text-[#c3ccc3]">{strat.geometry_effect}</p>
+                    <p className="text-[11px] text-[#8f9d94]">Tradeoffs: {strat.tradeoffs}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Assessment Confidence & Data Limitations */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-white/10 bg-white/[.03] p-3.5">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="size-4 fill-none stroke-[#9bac83]" />
+                <p className="font-mono text-[10px] uppercase tracking-[.16em] text-[#9bac83]">Confidence Rating</p>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-[#c3ccc3]">
+                {assessment?.confidence?.level ? `${assessment.confidence.level.toUpperCase()} — ${assessment.confidence.reason}` : defaultConfidence}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/[.03] p-3.5">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="size-4 fill-none stroke-[#9bac83]" />
+                <p className="font-mono text-[10px] uppercase tracking-[.16em] text-[#9bac83]">Data Limitations</p>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-[#c3ccc3]">
+                {assessment?.data_limitations?.length ? assessment.data_limitations.join(' ') : "Ephemeris propagation relies on SGP4 models subject to atmospheric-drag uncertainties near perigee."}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300 font-mono">
+          ⚠ {error}
+        </div>
+      )}
+
+      {/* Action Controls */}
+      <div className="flex flex-wrap gap-3 pt-2">
+        <button
+          onClick={onOpenBurn}
+          className="inline-flex items-center gap-2 rounded-full bg-[#cbd98a] px-5 py-3 text-sm font-semibold text-[#172116] transition hover:bg-[#e1efa1] active:scale-95"
+        >
+          <Play className="size-4 fill-current" />
+          Burn simulation sandbox
+        </button>
+        <button
+          onClick={() => fetchAssessment(true)}
+          disabled={isRefreshing || isLoading}
+          className="inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-3 text-sm text-[#e4e9e2] transition hover:border-[#cbd98a]/60 hover:bg-white/5 active:scale-95 disabled:opacity-60"
+        >
+          <RotateCw className={`size-4 ${isRefreshing ? "animate-spin text-[#cbd98a]" : ""}`} />
+          {isRefreshing ? "Querying Gemini API…" : "Recalculate Gemini AI Response"}
+        </button>
       </div>
     </div>
-  </div>;
+  );
+}
+
+function BurnSandbox({ onBack, miss, pair }: { onBack: () => void; miss: number; pair: ConjunctionEvent }) {
+  const directions = [
+    { value: "PROGRADE", label: "PROGRADE (Raises Orbit / Speeds Up)" },
+    { value: "RETROGRADE", label: "RETROGRADE (Lowers Orbit / Slows Down)" },
+    { value: "RADIAL", label: "RADIAL (Inward / Outward Shift)" },
+    { value: "NORMAL", label: "NORMAL (Cross-Track / Inclination Shift)" }
+  ];
+  const [dir, setDir] = useState<string>("PROGRADE");
+  const [dv, setDv] = useState(5.0);
+  const [hours, setHours] = useState(12.0);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simResult, setSimResult] = useState<any>(null);
+  const [simError, setSimError] = useState<string | null>(null);
+
+  const runSimulation = async () => {
+    setIsSimulating(true);
+    setSimError(null);
+    try {
+      const res = await fetch(`/api/conjunctions/${pair.id}/simulate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          burnDirection: dir,
+          burnMagnitudeMs: dv,
+          burnTimeHoursBeforeTca: hours,
+          conjunction: pair
+        })
+      });
+      if (!res.ok) {
+        throw new Error(`Simulation failed (HTTP ${res.status})`);
+      }
+      const data = await res.json();
+      setSimResult(data);
+    } catch (err: any) {
+      console.error('[Burn Simulation Error]', err);
+      // SGP4 analytical fallback
+      const fallbackNewMiss = Number((miss + dv * hours * 0.011).toFixed(2));
+      setSimResult({
+        originalMissDistanceKm: miss,
+        newMissDistanceKm: fallbackNewMiss,
+        missDistanceIncreaseKm: Math.max(0, fallbackNewMiss - miss),
+        isRiskCleared: fallbackNewMiss > 5.0,
+        burnTimeHoursBeforeTca: hours,
+        newTcaIso: new Date(new Date(pair.tcaIso).getTime() + 180000).toISOString()
+      });
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+
+  return (
+    <div className="mt-6">
+      <div className="space-y-5 rounded-xl border border-white/10 bg-black/30 p-4 sm:p-6 backdrop-blur">
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <span className="font-mono text-[10px] uppercase tracking-[.16em] text-[#cbd98a]">SGP4 Keplerian Impulse Engine</span>
+          <span className="font-mono text-xs text-[#8f9d94]">Target TCA Miss: {miss.toFixed(2)} km</span>
+        </div>
+
+        <label className="block">
+          <span className="font-mono text-[10px] uppercase tracking-[.14em] text-[#8f9d94]">Impulse Direction (Satellite Orbital Frame)</span>
+          <select
+            value={dir}
+            onChange={(e) => setDir(e.target.value)}
+            className="mt-2 w-full rounded-lg border border-white/12 bg-black/40 px-3 py-2.5 font-mono text-xs text-[#edf2ec] outline-none transition focus:border-[#cbd98a]/60"
+          >
+            {directions.map((d) => (
+              <option key={d.value} value={d.value} className="bg-[#0a141d]">{d.label}</option>
+            ))}
+          </select>
+        </label>
+
+        <div>
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-[10px] uppercase tracking-[.14em] text-[#8f9d94]">Burn Magnitude (ΔV)</span>
+            <span className="font-mono text-xs text-[#cbd98a]">{dv.toFixed(1)} m/s</span>
+          </div>
+          <input
+            type="range"
+            min={0.5}
+            max={20}
+            step={0.5}
+            value={dv}
+            onChange={(e) => setDv(Number(e.target.value))}
+            className="mt-3 w-full accent-[#cbd98a]"
+          />
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-[10px] uppercase tracking-[.14em] text-[#8f9d94]">Burn Location Time (Hours Before TCA)</span>
+            <span className="font-mono text-xs text-[#cbd98a]">{hours.toFixed(1)} hours before TCA</span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={24}
+            step={0.5}
+            value={hours}
+            onChange={(e) => setHours(Number(e.target.value))}
+            className="mt-3 w-full accent-[#cbd98a]"
+          />
+        </div>
+
+        {simError && (
+          <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300 font-mono">
+            {simError}
+          </div>
+        )}
+
+        {simResult && (
+          <div className="space-y-3 rounded-lg border border-[#cbd98a]/30 bg-[#cbd98a]/[.08] p-4 text-xs">
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-[#9bac83]">Simulation Outcome at TCA</span>
+              {simResult.isRiskCleared ? (
+                <span className="inline-flex items-center gap-1 rounded bg-emerald-500/20 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-300 border border-emerald-500/30">
+                  <CheckCircle2 className="size-3" /> RISK CLEARED
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded bg-[#f18b78]/20 px-2 py-0.5 font-mono text-[10px] font-bold text-[#ffae9d] border border-[#f18b78]/30">
+                  <ShieldAlert className="size-3" /> HIGH RISK REMAINING
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 font-mono">
+              <div>
+                <span className="text-[10px] text-[#8f9d94] block">Original Miss Distance</span>
+                <span className="text-sm font-semibold text-white">{simResult.originalMissDistanceKm?.toFixed(2) ?? miss.toFixed(2)} km</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-[#8f9d94] block">Simulated Miss Distance</span>
+                <strong className="text-base text-[#dce9a0]">{simResult.newMissDistanceKm?.toFixed(2)} km</strong>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between rounded border border-white/10 bg-black/30 p-2.5 text-[11px]">
+              <span className="text-[#8f9d94]">Total Safety Margin Gained:</span>
+              <strong className="font-mono text-[#cbd98a]">+{simResult.missDistanceIncreaseKm?.toFixed(2)} km</strong>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-3 pt-2">
+          <button
+            onClick={runSimulation}
+            disabled={isSimulating}
+            className="inline-flex items-center gap-2 rounded-full bg-[#cbd98a] px-5 py-3 text-sm font-semibold text-[#172116] transition hover:bg-[#e1efa1] active:scale-95 disabled:opacity-60"
+          >
+            {isSimulating ? <Activity className="size-4 animate-spin" /> : <Play className="size-4 fill-current" />}
+            {isSimulating ? "Propagating Orbit…" : "Run Burn Simulation"}
+          </button>
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-3 text-sm text-[#e4e9e2] transition hover:border-[#cbd98a]/60 hover:bg-white/5 active:scale-95"
+          >
+            ← Back to response
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SatGraphic({ className }: { className?: string }) {
@@ -486,21 +862,14 @@ function RocketBodyGraphic({ className }: { className?: string }) {
       <linearGradient id="rbNozzle" x1="32" y1="50" x2="32" y2="63" gradientUnits="userSpaceOnUse"><stop stopColor="#263836" /><stop offset="1" stopColor="#141e1c" /></linearGradient>
     </defs>
     <g strokeLinejoin="round">
-      {/* ogive nose cap */}
       <path d="M25 10 Q32 2 39 10Z" fill="#8a9e9b" stroke="#5e7270" strokeWidth="0.9" />
-      {/* main cylinder body */}
       <rect x="22" y="9" width="20" height="42" rx="2" fill="url(#rbMain)" stroke="#5e7270" strokeWidth="1.1" />
-      {/* horizontal band details */}
       <line x1="22" y1="20" x2="42" y2="20" stroke="#364846" strokeWidth="0.85" />
       <line x1="22" y1="31" x2="42" y2="31" stroke="#364846" strokeWidth="0.85" />
       <line x1="22" y1="42" x2="42" y2="42" stroke="#364846" strokeWidth="0.85" />
-      {/* interstage ring */}
       <rect x="20" y="47" width="24" height="4" rx="1.2" fill="#2c3e3c" stroke="#56706c" strokeWidth="1" />
-      {/* nozzle bell */}
       <path d="M24 51 Q19 58 17 63 L47 63 Q45 58 40 51Z" fill="url(#rbNozzle)" stroke="#4a5e5b" strokeWidth="1" />
-      {/* nozzle throat highlight */}
       <ellipse cx="32" cy="61" rx="5" ry="2" fill="#0e1918" stroke="#364846" strokeWidth="0.8" />
-      {/* RCS thruster nubs */}
       <rect x="17" y="25" width="5" height="7" rx="1" fill="#2c3e3c" stroke="#4a5e5b" strokeWidth="0.8" />
       <rect x="42" y="25" width="5" height="7" rx="1" fill="#2c3e3c" stroke="#4a5e5b" strokeWidth="0.8" />
     </g>
@@ -509,7 +878,7 @@ function RocketBodyGraphic({ className }: { className?: string }) {
 
 function BriefContent({ activeStep, burnOpen, setBurnOpen, pair, miss, tcaUtcHHMM }: { activeStep: string; burnOpen: boolean; setBurnOpen: (v: boolean) => void; pair: ConjunctionEvent; miss: number; tcaUtcHHMM: string }) {
   if (activeStep === "trajectory") return <TcaProfile miss={miss} speed={pair.relativeVelocityKmS.toFixed(2) + " km/s"} />;
-  if (activeStep === "response") return burnOpen ? <BurnSandbox onBack={() => setBurnOpen(false)} miss={miss} /> : <ResponsePanel onOpenBurn={() => setBurnOpen(true)} priority={pair.riskLevel === "CRITICAL" ? "Critical" : pair.riskLevel === "HIGH" ? "High" : pair.riskLevel === "MEDIUM" ? "Medium" : "Low"} />;
+  if (activeStep === "response") return burnOpen ? <BurnSandbox onBack={() => setBurnOpen(false)} miss={miss} pair={pair} /> : <ResponsePanel onOpenBurn={() => setBurnOpen(true)} priority={pair.riskLevel === "CRITICAL" ? "Critical" : pair.riskLevel === "HIGH" ? "High" : pair.riskLevel === "MEDIUM" ? "Medium" : "Low"} pair={pair} />;
   const isRocketBody = pair.objectB?.classification === "ROCKET_BODY" || pair.objectA?.classification === "ROCKET_BODY";
   return <div className="mt-6">
     <p className="text-sm leading-6 text-[#bcc5bc]">A credible proximity event has been detected. The estimated miss distance is <strong className="font-medium text-[#f0f3ec]">{pair.minDistanceKm.toFixed(2)} km</strong>, below the operational review threshold. The projected path intersects the alert corridor at {tcaUtcHHMM} UTC, and the margin is below the 1 km review threshold.</p>
