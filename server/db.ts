@@ -1,15 +1,123 @@
+import 'dotenv/config';
 import initSqlJs, { Database } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
+import pg from 'pg';
 import { TleRecord, SnapshotMetadata } from './types';
 
+const { Pool } = pg;
+
 let dbInstance: Database | null = null;
+let pgPool: pg.Pool | null = null;
+
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'debris_tracker.sqlite');
 export const KEEP_LAST_N_SNAPSHOTS = 3;
 
 /**
- * Initializes or retrieves SQLite database with upgraded snapshot schemas
+ * Detects if PostgreSQL is configured via DATABASE_URL
+ */
+export function isPostgresConfigured(): boolean {
+  return !!process.env.DATABASE_URL && process.env.DATABASE_URL.trim().length > 0;
+}
+
+/**
+ * Initializes and retrieves PostgreSQL connection pool (Production / Managed DB)
+ */
+export async function getPgPool(): Promise<pg.Pool> {
+  if (pgPool) {
+    return pgPool;
+  }
+
+  const connectionString = process.env.DATABASE_URL!;
+  const isLocalPg = connectionString.includes('localhost') || connectionString.includes('127.0.0.1');
+
+  pgPool = new Pool({
+    connectionString,
+    ssl: isLocalPg ? false : { rejectUnauthorized: false },
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000
+  });
+
+  console.log('[DB] Connecting to managed PostgreSQL database...');
+
+  // Initialize PostgreSQL schemas
+  const client = await pgPool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS snapshots (
+        id VARCHAR(64) PRIMARY KEY,
+        source VARCHAR(64) NOT NULL,
+        fetched_at TIMESTAMPTZ NOT NULL,
+        processed_at TIMESTAMPTZ NOT NULL,
+        object_count INT NOT NULL,
+        total_fetched INT NOT NULL,
+        invalid_count INT NOT NULL,
+        non_leo_count INT NOT NULL,
+        data_hash VARCHAR(64) NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT FALSE,
+        status VARCHAR(32) NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS tles (
+        id VARCHAR(64) NOT NULL,
+        snapshot_id VARCHAR(64) REFERENCES snapshots(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        line1 TEXT NOT NULL,
+        line2 TEXT NOT NULL,
+        classification VARCHAR(32) NOT NULL,
+        orbit_class VARCHAR(16) NOT NULL,
+        perigee_km DOUBLE PRECISION NOT NULL,
+        apogee_km DOUBLE PRECISION NOT NULL,
+        altitude_km DOUBLE PRECISION NOT NULL,
+        inclination_deg DOUBLE PRECISION NOT NULL,
+        eccentricity DOUBLE PRECISION NOT NULL,
+        mean_motion DOUBLE PRECISION NOT NULL,
+        period_min DOUBLE PRECISION NOT NULL,
+        epoch_year INT NOT NULL,
+        epoch_day DOUBLE PRECISION NOT NULL,
+        source VARCHAR(64) NOT NULL,
+        data_json JSONB NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL,
+        PRIMARY KEY (snapshot_id, id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_tles_snapshot_id ON tles (snapshot_id);
+      CREATE INDEX IF NOT EXISTS idx_tles_classification ON tles (classification);
+      CREATE INDEX IF NOT EXISTS idx_tles_orbit_class ON tles (orbit_class);
+      CREATE INDEX IF NOT EXISTS idx_snapshots_active ON snapshots (is_active);
+      CREATE INDEX IF NOT EXISTS idx_snapshots_fetched_at ON snapshots (fetched_at);
+
+      CREATE TABLE IF NOT EXISTS conjunctions (
+        id VARCHAR(64) PRIMARY KEY,
+        snapshot_id VARCHAR(64),
+        object_a_id VARCHAR(64) NOT NULL,
+        object_b_id VARCHAR(64) NOT NULL,
+        tca TIMESTAMPTZ NOT NULL,
+        min_distance DOUBLE PRECISION NOT NULL,
+        relative_velocity DOUBLE PRECISION NOT NULL,
+        risk_score DOUBLE PRECISION NOT NULL,
+        risk_level VARCHAR(32) NOT NULL,
+        data_json JSONB NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS system_metadata (
+        key VARCHAR(128) PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+    console.log('[DB] PostgreSQL schema verified and ready.');
+  } finally {
+    client.release();
+  }
+
+  return pgPool;
+}
+
+/**
+ * Initializes or retrieves SQLite database with upgraded snapshot schemas (Local / Offline Mode)
  */
 export async function getDb(): Promise<Database> {
   if (dbInstance) {
@@ -34,21 +142,6 @@ export async function getDb(): Promise<Database> {
   } else {
     dbInstance = new SQL.Database();
     console.log('[DB] Initialized fresh in-memory SQLite database.');
-  }
-
-  // Check if existing tables need schema migration to snapshot model
-  try {
-    const checkCols = dbInstance.exec("PRAGMA table_info(tles)");
-    if (checkCols.length > 0 && checkCols[0].values) {
-      const colNames = checkCols[0].values.map((v: any[]) => v[1]);
-      if (!colNames.includes('snapshot_id') || !colNames.includes('orbit_class')) {
-        console.log('[DB Migration] Migrating legacy SQLite schema to LEO snapshot model...');
-        dbInstance.run('DROP TABLE IF EXISTS tles;');
-        dbInstance.run('DROP TABLE IF EXISTS conjunctions;');
-      }
-    }
-  } catch (err) {
-    console.warn('[DB Migration] Schema check exception:', err);
   }
 
   // Ensure tables and indices exist
@@ -121,10 +214,10 @@ export async function getDb(): Promise<Database> {
 }
 
 /**
- * Persists SQLite memory state to disk
+ * Persists SQLite memory state to disk (only active when using local SQLite)
  */
 export function saveDb(): void {
-  if (!dbInstance) return;
+  if (isPostgresConfigured() || !dbInstance) return;
   try {
     const data = dbInstance.export();
     const buffer = Buffer.from(data);
@@ -146,18 +239,130 @@ export async function saveNewSnapshot(
   records: TleRecord[],
   keepLastN: number = KEEP_LAST_N_SNAPSHOTS
 ): Promise<void> {
-  const db = await getDb();
+  if (isPostgresConfigured()) {
+    const pool = await getPgPool();
+    const client = await pool.connect();
 
+    try {
+      await client.query('BEGIN');
+
+      // 1. Mark existing active snapshots as SUPERSEDED
+      await client.query("UPDATE snapshots SET is_active = FALSE, status = 'SUPERSEDED' WHERE is_active = TRUE");
+
+      // 2. Insert new Snapshot record
+      await client.query(
+        `INSERT INTO snapshots (
+          id, source, fetched_at, processed_at, object_count,
+          total_fetched, invalid_count, non_leo_count, data_hash,
+          is_active, status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, 'ACTIVE')
+        ON CONFLICT (id) DO UPDATE SET
+          source = EXCLUDED.source,
+          fetched_at = EXCLUDED.fetched_at,
+          processed_at = EXCLUDED.processed_at,
+          object_count = EXCLUDED.object_count,
+          is_active = TRUE,
+          status = 'ACTIVE'`,
+        [
+          metadata.id,
+          metadata.source || 'SAMPLE_DATASET',
+          metadata.fetchedAt || new Date().toISOString(),
+          metadata.processedAt || new Date().toISOString(),
+          records.length,
+          metadata.totalFetched ?? records.length,
+          metadata.invalidCount ?? 0,
+          metadata.nonLeoCount ?? 0,
+          metadata.contentHash || metadata.dataHash || 'no_hash'
+        ]
+      );
+
+      // 3. Batch insert TLE records
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < records.length; i += BATCH_SIZE) {
+        const batch = records.slice(i, i + BATCH_SIZE);
+        const valueStrings: string[] = [];
+        const params: any[] = [];
+        let pIdx = 1;
+
+        for (const r of batch) {
+          const recordWithSnapshot: TleRecord = {
+            ...r,
+            snapshotId: metadata.id,
+            orbitClass: r.orbitClass || 'LEO'
+          };
+
+          valueStrings.push(
+            `($${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++}, $${pIdx++})`
+          );
+
+          params.push(
+            r.id,
+            metadata.id,
+            r.name || 'UNKNOWN',
+            r.line1,
+            r.line2,
+            r.classification || 'ACTIVE_SATELLITE',
+            recordWithSnapshot.orbitClass || 'LEO',
+            r.perigeeKm ?? 0,
+            r.apogeeKm ?? 0,
+            ((r.perigeeKm || 0) + (r.apogeeKm || 0)) / 2,
+            r.inclinationDeg ?? 0,
+            r.eccentricity ?? 0,
+            r.meanMotionRevDay ?? 15.0,
+            r.periodMin ?? 92.0,
+            r.epochYear ?? 2026,
+            r.epochDay ?? 1,
+            r.source || metadata.source || 'SAMPLE_DATASET',
+            JSON.stringify(recordWithSnapshot),
+            r.updatedAt || new Date().toISOString()
+          );
+        }
+
+        const insertQuery = `
+          INSERT INTO tles (
+            id, snapshot_id, name, line1, line2, classification,
+            orbit_class, perigee_km, apogee_km, altitude_km,
+            inclination_deg, eccentricity, mean_motion, period_min,
+            epoch_year, epoch_day, source, data_json, updated_at
+          ) VALUES ${valueStrings.join(', ')}
+          ON CONFLICT (snapshot_id, id) DO UPDATE SET
+            data_json = EXCLUDED.data_json,
+            updated_at = EXCLUDED.updated_at
+        `;
+
+        await client.query(insertQuery, params);
+      }
+
+      // 4. Prune older snapshots exceeding retention policy
+      const snapListRes = await client.query('SELECT id FROM snapshots ORDER BY fetched_at DESC');
+      if (snapListRes.rows.length > keepLastN) {
+        const pruneIds = snapListRes.rows.slice(keepLastN).map((r) => r.id);
+        await client.query('DELETE FROM snapshots WHERE id = ANY($1)', [pruneIds]);
+        console.log(`[DB] Pruned ${pruneIds.length} older snapshots from PostgreSQL.`);
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('[DB] PostgreSQL snapshot insertion failed, rolled back:', err);
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    await setMetadata('active_snapshot_id', metadata.id);
+    await setMetadata('last_tle_update', metadata.fetchedAt);
+    await setMetadata('tracked_count', records.length.toString());
+    await setMetadata('active_source', metadata.source);
+    return;
+  }
+
+  // SQLite fallback
+  const db = await getDb();
   db.run('BEGIN TRANSACTION;');
   try {
-    // 1. Mark existing active snapshots as SUPERSEDED
-    db.run(`
-      UPDATE snapshots
-      SET is_active = 0, status = 'SUPERSEDED'
-      WHERE is_active = 1
-    `);
+    db.run("UPDATE snapshots SET is_active = 0, status = 'SUPERSEDED' WHERE is_active = 1");
 
-    // 2. Insert new Snapshot record
     const snapStmt = db.prepare(`
       INSERT OR REPLACE INTO snapshots (
         id, source, fetched_at, processed_at, object_count,
@@ -179,7 +384,6 @@ export async function saveNewSnapshot(
     ]);
     snapStmt.free();
 
-    // 3. Insert all TLE records tied to this snapshot
     const tleStmt = db.prepare(`
       INSERT OR REPLACE INTO tles (
         id, snapshot_id, name, line1, line2, classification,
@@ -220,12 +424,7 @@ export async function saveNewSnapshot(
     }
     tleStmt.free();
 
-    // 4. Prune older snapshots exceeding retention policy (keep last N)
-    const res = db.exec(`
-      SELECT id FROM snapshots
-      ORDER BY fetched_at DESC
-    `);
-
+    const res = db.exec('SELECT id FROM snapshots ORDER BY fetched_at DESC');
     if (res && res.length > 0 && res[0].values) {
       const allSnapshotIds = res[0].values.map((v) => v[0] as string);
       if (allSnapshotIds.length > keepLastN) {
@@ -241,7 +440,7 @@ export async function saveNewSnapshot(
     db.run('COMMIT;');
   } catch (err) {
     db.run('ROLLBACK;');
-    console.error('[DB] Snapshot insertion failed, rolled back:', err);
+    console.error('[DB] SQLite snapshot insertion failed, rolled back:', err);
     throw err;
   }
 
@@ -256,9 +455,73 @@ export async function saveNewSnapshot(
  * Loads the active snapshot metadata and its full set of TLE records
  */
 export async function loadActiveSnapshot(): Promise<{ metadata: SnapshotMetadata | null; records: TleRecord[] }> {
-  const db = await getDb();
+  if (isPostgresConfigured()) {
+    const pool = await getPgPool();
+    const snapRes = await pool.query(
+      `SELECT id, source, fetched_at, processed_at, object_count,
+              total_fetched, invalid_count, non_leo_count, data_hash,
+              is_active, status
+       FROM snapshots
+       WHERE is_active = TRUE
+       LIMIT 1`
+    );
 
-  // 1. Fetch active snapshot metadata
+    if (snapRes.rows.length === 0) {
+      const fallbackRes = await pool.query(
+        `SELECT id, source, fetched_at, processed_at, object_count,
+                total_fetched, invalid_count, non_leo_count, data_hash,
+                is_active, status
+         FROM snapshots
+         ORDER BY fetched_at DESC
+         LIMIT 1`
+      );
+
+      if (fallbackRes.rows.length === 0) {
+        return { metadata: null, records: [] };
+      }
+
+      const row = fallbackRes.rows[0];
+      const meta: SnapshotMetadata = {
+        id: row.id,
+        source: row.source,
+        fetchedAt: row.fetched_at ? new Date(row.fetched_at).toISOString() : new Date().toISOString(),
+        processedAt: row.processed_at ? new Date(row.processed_at).toISOString() : new Date().toISOString(),
+        objectCount: row.object_count,
+        totalFetched: row.total_fetched,
+        invalidCount: row.invalid_count,
+        nonLeoCount: row.non_leo_count,
+        dataHash: row.data_hash,
+        isActive: row.is_active,
+        status: row.status
+      };
+
+      const tlesRes = await pool.query('SELECT data_json FROM tles WHERE snapshot_id = $1', [meta.id]);
+      const records = tlesRes.rows.map((r) => r.data_json as TleRecord);
+      return { metadata: meta, records };
+    }
+
+    const row = snapRes.rows[0];
+    const metadata: SnapshotMetadata = {
+      id: row.id,
+      source: row.source,
+      fetchedAt: row.fetched_at ? new Date(row.fetched_at).toISOString() : new Date().toISOString(),
+      processedAt: row.processed_at ? new Date(row.processed_at).toISOString() : new Date().toISOString(),
+      objectCount: row.object_count,
+      totalFetched: row.total_fetched,
+      invalidCount: row.invalid_count,
+      nonLeoCount: row.non_leo_count,
+      dataHash: row.data_hash,
+      isActive: row.is_active,
+      status: row.status
+    };
+
+    const tlesRes = await pool.query('SELECT data_json FROM tles WHERE snapshot_id = $1', [metadata.id]);
+    const records = tlesRes.rows.map((r) => r.data_json as TleRecord);
+    return { metadata, records };
+  }
+
+  // SQLite fallback
+  const db = await getDb();
   const snapRes = db.exec(`
     SELECT id, source, fetched_at, processed_at, object_count,
            total_fetched, invalid_count, non_leo_count, data_hash,
@@ -269,7 +532,6 @@ export async function loadActiveSnapshot(): Promise<{ metadata: SnapshotMetadata
   `);
 
   if (!snapRes || snapRes.length === 0 || !snapRes[0].values || snapRes[0].values.length === 0) {
-    // If no explicit active snapshot, try getting the most recent snapshot
     const fallbackRes = db.exec(`
       SELECT id, source, fetched_at, processed_at, object_count,
              total_fetched, invalid_count, non_leo_count, data_hash,
@@ -298,14 +560,13 @@ export async function loadActiveSnapshot(): Promise<{ metadata: SnapshotMetadata
       status: row[10] as any
     };
 
-    // Load records for this snapshot
     const tlesRes = db.exec(`
       SELECT data_json FROM tles
       WHERE snapshot_id = '${meta.id}'
       ORDER BY rowid ASC
     `);
 
-    const records = (tlesRes && tlesRes[0]?.values)
+    const records = tlesRes && tlesRes[0]?.values
       ? tlesRes[0].values.map((r) => JSON.parse(r[0] as string) as TleRecord)
       : [];
 
@@ -333,7 +594,7 @@ export async function loadActiveSnapshot(): Promise<{ metadata: SnapshotMetadata
     ORDER BY rowid ASC
   `);
 
-  const records = (tlesRes && tlesRes[0]?.values)
+  const records = tlesRes && tlesRes[0]?.values
     ? tlesRes[0].values.map((r) => JSON.parse(r[0] as string) as TleRecord)
     : [];
 
@@ -352,6 +613,32 @@ export async function getActiveSnapshotMetadata(): Promise<SnapshotMetadata | nu
  * Returns list of retained snapshots
  */
 export async function getSnapshotList(): Promise<SnapshotMetadata[]> {
+  if (isPostgresConfigured()) {
+    const pool = await getPgPool();
+    const res = await pool.query(
+      `SELECT id, source, fetched_at, processed_at, object_count,
+              total_fetched, invalid_count, non_leo_count, data_hash,
+              is_active, status
+       FROM snapshots
+       ORDER BY fetched_at DESC`
+    );
+
+    return res.rows.map((row) => ({
+      id: row.id,
+      source: row.source,
+      fetchedAt: row.fetched_at ? new Date(row.fetched_at).toISOString() : new Date().toISOString(),
+      processedAt: row.processed_at ? new Date(row.processed_at).toISOString() : new Date().toISOString(),
+      objectCount: row.object_count,
+      totalFetched: row.total_fetched,
+      invalidCount: row.invalid_count,
+      nonLeoCount: row.non_leo_count,
+      dataHash: row.data_hash,
+      isActive: row.is_active,
+      status: row.status
+    }));
+  }
+
+  // SQLite fallback
   const db = await getDb();
   const res = db.exec(`
     SELECT id, source, fetched_at, processed_at, object_count,
@@ -384,19 +671,38 @@ export async function getSnapshotList(): Promise<SnapshotMetadata[]> {
  * Rolls back the active snapshot to a specific retained snapshot ID
  */
 export async function rollbackToSnapshot(snapshotId: string): Promise<boolean> {
-  const db = await getDb();
+  if (isPostgresConfigured()) {
+    const pool = await getPgPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query("UPDATE snapshots SET is_active = FALSE, status = 'SUPERSEDED' WHERE is_active = TRUE");
+      await client.query("UPDATE snapshots SET is_active = TRUE, status = 'ACTIVE' WHERE id = $1", [snapshotId]);
+      await client.query('COMMIT');
+      await setMetadata('active_snapshot_id', snapshotId);
+      return true;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      console.error('[DB] PostgreSQL Rollback failed:', err);
+      return false;
+    } finally {
+      client.release();
+    }
+  }
 
+  // SQLite fallback
+  const db = await getDb();
   db.run('BEGIN TRANSACTION;');
   try {
-    db.run('UPDATE snapshots SET is_active = 0, status = "SUPERSEDED" WHERE is_active = 1');
-    db.run('UPDATE snapshots SET is_active = 1, status = "ACTIVE" WHERE id = ?', [snapshotId]);
+    db.run("UPDATE snapshots SET is_active = 0, status = 'SUPERSEDED' WHERE is_active = 1");
+    db.run("UPDATE snapshots SET is_active = 1, status = 'ACTIVE' WHERE id = ?", [snapshotId]);
     db.run('COMMIT;');
     await setMetadata('active_snapshot_id', snapshotId);
     saveDb();
     return true;
   } catch (err) {
     db.run('ROLLBACK;');
-    console.error('[DB] Rollback failed:', err);
+    console.error('[DB] SQLite Rollback failed:', err);
     return false;
   }
 }
@@ -432,6 +738,17 @@ export async function saveTleRecords(records: TleRecord[]): Promise<void> {
 }
 
 export async function setMetadata(key: string, value: string): Promise<void> {
+  if (isPostgresConfigured()) {
+    const pool = await getPgPool();
+    await pool.query(
+      `INSERT INTO system_metadata (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [key, value]
+    );
+    return;
+  }
+
+  // SQLite fallback
   const db = await getDb();
   const stmt = db.prepare('INSERT OR REPLACE INTO system_metadata (key, value) VALUES (?, ?)');
   stmt.run([key, value]);
@@ -440,6 +757,16 @@ export async function setMetadata(key: string, value: string): Promise<void> {
 }
 
 export async function getMetadata(key: string, defaultValue: string = ''): Promise<string> {
+  if (isPostgresConfigured()) {
+    const pool = await getPgPool();
+    const res = await pool.query('SELECT value FROM system_metadata WHERE key = $1', [key]);
+    if (res.rows.length > 0) {
+      return res.rows[0].value || defaultValue;
+    }
+    return defaultValue;
+  }
+
+  // SQLite fallback
   const db = await getDb();
   const stmt = db.prepare('SELECT value FROM system_metadata WHERE key = ?');
   stmt.bind([key]);
@@ -451,5 +778,3 @@ export async function getMetadata(key: string, defaultValue: string = ''): Promi
   stmt.free();
   return val;
 }
-
-

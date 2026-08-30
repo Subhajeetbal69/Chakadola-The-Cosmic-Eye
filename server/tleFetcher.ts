@@ -21,9 +21,55 @@ const CELESTRAK_LEO_URLS = [
   'https://celestrak.org/NORAD/elements/gp.php?GROUP=special&FORMAT=tle'
 ];
 
-// Secondary Online Mirror Endpoints (High-reliability fallback)
-const SECONDARY_TLE_MIRROR_URLS = [
-  'https://tle.ivanstanojevic.me/api/tle/?page-size=100'
+// Secondary Online Mirror Endpoints (High-capacity 2,500 - 3,000+ LEO catalog)
+const SECONDARY_TLE_MIRROR_TARGETS = [
+  // 1. Core Popular Satellites & Space Stations (Pages 1-4) -> 400 raw
+  'https://tle.ivanstanojevic.me/api/tle/?page=1&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?page=2&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?page=3&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?page=4&page-size=100',
+
+  // 2. Starlink Mega-Constellation (Pages 1-8) -> 800 raw
+  'https://tle.ivanstanojevic.me/api/tle/?search=starlink&page=1&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=starlink&page=2&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=starlink&page=3&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=starlink&page=4&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=starlink&page=5&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=starlink&page=6&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=starlink&page=7&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=starlink&page=8&page-size=100',
+
+  // 3. OneWeb Constellation (Pages 1-3) -> 300 raw
+  'https://tle.ivanstanojevic.me/api/tle/?search=oneweb&page=1&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=oneweb&page=2&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=oneweb&page=3&page-size=100',
+
+  // 4. Iridium-NEXT Communications Fleet (Pages 1-3) -> 300 raw
+  'https://tle.ivanstanojevic.me/api/tle/?search=iridium&page=1&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=iridium&page=2&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=iridium&page=3&page-size=100',
+
+  // 5. Cataloged Fragmentation Debris (Pages 1-4) -> 400 raw
+  'https://tle.ivanstanojevic.me/api/tle/?search=deb&page=1&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=deb&page=2&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=deb&page=3&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=deb&page=4&page-size=100',
+
+  // 6. Cosmos-2251 Collision Debris Belts (Pages 1-3) -> 300 raw
+  'https://tle.ivanstanojevic.me/api/tle/?search=cosmos&page=1&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=cosmos&page=2&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=cosmos&page=3&page-size=100',
+
+  // 7. Fengyun-1C ASAT Collision Debris Belts (Pages 1-3) -> 300 raw
+  'https://tle.ivanstanojevic.me/api/tle/?search=fengyun&page=1&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=fengyun&page=2&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=fengyun&page=3&page-size=100',
+
+  // 8. Spent Rocket Bodies & Upper Stages -> 400 raw
+  'https://tle.ivanstanojevic.me/api/tle/?search=r/b&page=1&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=r/b&page=2&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=cz-&page=1&page-size=100',
+  'https://tle.ivanstanojevic.me/api/tle/?search=cz-&page=2&page-size=100'
 ];
 
 // ── Circuit Breaker State ──────────────────────────────────────────
@@ -302,42 +348,87 @@ async function fetchFromCelestrakPolitely(): Promise<{ success: boolean; rawData
 }
 
 /**
- * Tier 2: Secondary Online TLE REST Mirror Fallback
+ * Tier 2: Secondary Online TLE REST Mirror Fallback (Batched High-Capacity Ingestion: 2,500 - 3,000+ LEO)
  */
 async function fetchFromSecondaryMirror(): Promise<{ success: boolean; rawData: string; error?: string }> {
   try {
-    const res = await fetchWithDiagnostics(SECONDARY_TLE_MIRROR_URLS[0], 8000);
-    if (res.ok && res.data) {
-      try {
-        const json = JSON.parse(res.data);
-        if (json && Array.isArray(json.member) && json.member.length > 0) {
-          const lines: string[] = [];
-          for (const item of json.member) {
-            if (item.name && item.line1 && item.line2) {
-              lines.push(item.name);
-              lines.push(item.line1);
-              lines.push(item.line2);
+    const BATCH_SIZE = 4;
+    const PACING_DELAY_MS = 250;
+    const uniqueObjectsMap = new Map<string, { name: string; line1: string; line2: string }>();
+
+    const totalTargets = SECONDARY_TLE_MIRROR_TARGETS.length;
+    console.log(`[TLE Mirror] Initiating batched ingestion across ${totalTargets} targeted mirror endpoints...`);
+
+    for (let i = 0; i < totalTargets; i += BATCH_SIZE) {
+      const batchUrls = SECONDARY_TLE_MIRROR_TARGETS.slice(i, i + BATCH_SIZE);
+      const batchPromises = batchUrls.map((url) => fetchWithDiagnostics(url, 8000));
+      const batchResults = await Promise.allSettled(batchPromises);
+
+      for (const res of batchResults) {
+        if (res.status === 'fulfilled' && res.value.ok && res.value.data) {
+          try {
+            const json = JSON.parse(res.value.data);
+            if (json && Array.isArray(json.member)) {
+              for (const item of json.member) {
+                if (item.name && item.line1 && item.line2) {
+                  const noradKey = item.satelliteId ? String(item.satelliteId) : item.line1.slice(2, 7).trim();
+                  if (noradKey && !uniqueObjectsMap.has(noradKey)) {
+                    uniqueObjectsMap.set(noradKey, {
+                      name: item.name.trim(),
+                      line1: item.line1.trim(),
+                      line2: item.line2.trim()
+                    });
+                  }
+                }
+              }
+            }
+          } catch {
+            // Text TLE parsing fallback
+            const lines = res.value.data.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean);
+            for (let j = 0; j < lines.length; j++) {
+              if (lines[j].startsWith('1 ') && lines[j + 1]?.startsWith('2 ')) {
+                const name = j > 0 && !lines[j - 1].startsWith('1 ') && !lines[j - 1].startsWith('2 ') ? lines[j - 1] : `SAT-${lines[j].slice(2, 7).trim()}`;
+                const noradKey = lines[j].slice(2, 7).trim();
+                if (noradKey && !uniqueObjectsMap.has(noradKey)) {
+                  uniqueObjectsMap.set(noradKey, {
+                    name,
+                    line1: lines[j],
+                    line2: lines[j + 1]
+                  });
+                }
+                j++;
+              }
             }
           }
-          if (lines.length >= 30) {
-            return { success: true, rawData: lines.join('\n') };
-          }
-        }
-      } catch {
-        // Not JSON, check if plain text TLE
-        if (res.data.length > 200) {
-          return { success: true, rawData: res.data };
         }
       }
+
+      // Pacing delay between batches to respect upstream server
+      if (i + BATCH_SIZE < totalTargets) {
+        await sleep(PACING_DELAY_MS);
+      }
     }
-    return { success: false, rawData: '', error: res.error || 'Invalid mirror payload' };
+
+    console.log(`[TLE Mirror] Ingestion complete. Collected ${uniqueObjectsMap.size} unique orbital element records.`);
+
+    if (uniqueObjectsMap.size >= 100) {
+      const rawLines: string[] = [];
+      for (const obj of uniqueObjectsMap.values()) {
+        rawLines.push(obj.name);
+        rawLines.push(obj.line1);
+        rawLines.push(obj.line2);
+      }
+      return { success: true, rawData: rawLines.join('\n') };
+    }
+
+    return { success: false, rawData: '', error: `Insufficient unique mirror records (${uniqueObjectsMap.size})` };
   } catch (err: any) {
     return { success: false, rawData: '', error: err?.message || 'Mirror fetch error' };
   }
 }
 
 /**
- * Tier 3: Optional Authenticated Space-Track.org Ingestion (if credentials provided)
+ * Tier 3: Optional Authenticated Space-Track.org Ingestion (High-Capacity 2,500 - 3,000+ LEO)
  */
 async function fetchFromSpaceTrack(): Promise<{ success: boolean; rawData: string; error?: string }> {
   const user = process.env.SPACETRACK_USER;
@@ -348,22 +439,33 @@ async function fetchFromSpaceTrack(): Promise<{ success: boolean; rawData: strin
 
   try {
     const authUrl = 'https://www.space-track.org/ajaxauth/login';
-    const queryUrl = 'https://www.space-track.org/basicspacedata/query/class/gp/decay_date/null-val/orderby/norad_cat_id/limit/500/format/tle';
+    // Bulk query up to 3,500 active objects in a single request (compliant with 30 req/min limit)
+    const queryUrl = 'https://www.space-track.org/basicspacedata/query/class/gp/decay_date/null-val/orderby/norad_cat_id/limit/3500/format/tle';
+
+    const loginController = new AbortController();
+    const loginTimeout = setTimeout(() => loginController.abort(), 10000);
 
     const loginResp = await fetch(authUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `identity=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}`
+      body: `identity=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}`,
+      signal: loginController.signal
     });
+    clearTimeout(loginTimeout);
 
     if (!loginResp.ok) {
       return { success: false, rawData: '', error: `Space-Track auth failed (HTTP ${loginResp.status})` };
     }
 
     const cookie = loginResp.headers.get('set-cookie');
+    const dataController = new AbortController();
+    const dataTimeout = setTimeout(() => dataController.abort(), 15000);
+
     const dataResp = await fetch(queryUrl, {
-      headers: { Cookie: cookie || '' }
+      headers: { Cookie: cookie || '' },
+      signal: dataController.signal
     });
+    clearTimeout(dataTimeout);
 
     if (dataResp.ok) {
       const text = await dataResp.text();
