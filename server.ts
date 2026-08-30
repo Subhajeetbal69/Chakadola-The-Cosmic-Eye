@@ -48,7 +48,7 @@ import {
   getSnapshotList,
   rollbackToSnapshot
 } from './server/db';
-import { getConjunctionAssessment } from './server/ai/aiServices';
+import { getConjunctionAssessment } from './ai/aiServices';
 
 let currentTles: TleRecord[] = [];
 let currentConjunctions: ConjunctionEvent[] = [];
