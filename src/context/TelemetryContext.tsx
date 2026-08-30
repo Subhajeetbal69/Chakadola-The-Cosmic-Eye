@@ -345,27 +345,23 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const handleFetchLive = async () => {
     setIsLoading(true);
-    showToast('Synchronizing curated satellite & debris fleet with CelesTrak...', 'info');
-
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ action: 'fetch_live' }));
-    }
+    showToast('Synchronizing satellite & debris fleet with orbital data providers...', 'info');
 
     try {
       const res = await fetch('/api/tle/fetch').then((r) => r.json());
       if (res.success) {
         showToast(
           res.isFallback
-            ? `Curated reference fleet active: ${res.count} targets tracked.`
-            : `Synchronized ${res.count} curated fleet targets with live CelesTrak TLEs!`,
+            ? `${res.source}: ${res.count} targets loaded.`
+            : `Synchronized ${res.count} targets from ${res.source}!`,
           res.isFallback ? 'warn' : 'success'
         );
         await loadData();
       } else {
-        showToast(`CelesTrak sync error: ${res.error}`, 'warn');
+        showToast(`Sync error: ${res.error || 'Failed to reach providers'}`, 'warn');
       }
     } catch (err: any) {
-      showToast('Failed to sync with CelesTrak', 'warn');
+      showToast('Failed to sync orbital data', 'warn');
     } finally {
       setIsLoading(false);
     }
@@ -374,10 +370,6 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const handleLoadDemo = async () => {
     setIsLoading(true);
     showToast('Loading deterministic conjunction demonstration scenario...', 'info');
-
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ action: 'load_demo' }));
-    }
 
     try {
       const res = await fetch('/api/tle/demo', { method: 'POST' }).then((r) => r.json());

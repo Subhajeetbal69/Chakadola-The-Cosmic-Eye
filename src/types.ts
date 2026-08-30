@@ -28,6 +28,17 @@ export interface SnapshotMetadata {
   status: 'ACTIVE' | 'SUPERSEDED' | 'FAILED';
 }
 
+export interface CircuitBreakerStatus {
+  state: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+  consecutiveFailures: number;
+  failureThreshold: number;
+  cooldownRemainingSec: number;
+  lastFailureTime: string | null;
+  lastSuccessTime: string | null;
+  lastError: string | null;
+  totalAttempts: number;
+}
+
 export interface DataStatusResponse {
   mode: string;
   source: string;
@@ -42,6 +53,7 @@ export interface DataStatusResponse {
   activeSnapshotId: string;
   isFallback: boolean;
   retentionCount?: number;
+  circuitBreaker?: CircuitBreakerStatus;
 }
 
 export interface TleRecord {

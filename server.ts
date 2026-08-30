@@ -21,7 +21,9 @@ import {
 import {
   fetchLiveTleData,
   createDeterministicDemoScenario,
-  bootstrapInitialSnapshot
+  bootstrapInitialSnapshot,
+  getCircuitBreakerStatus,
+  ingestRawTleContent
 } from './server/tleFetcher';
 import {
   detectConjunctions,
@@ -266,10 +268,10 @@ async function initCoreEngine() {
   currentConjunctions = detectConjunctions(currentTles, activeConfig, lastAnalysisDate);
   console.log(`[Core Engine] Initialized with ${currentTles.length} LEO space objects and ${currentConjunctions.length} conjunction alerts.`);
 
-  // Background refresh daemon (every 15 minutes)
-  const TLE_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
+  // Background refresh daemon (every 2 hours - aligned with upstream GP publication cadence)
+  const TLE_REFRESH_INTERVAL_MS = 2 * 60 * 60 * 1000;
   setInterval(() => {
-    console.log('[Background Daemon] Polling CelesTrak for latest LEO orbital elements...');
+    console.log('[Background Daemon] Running scheduled 2-hour LEO orbital elements refresh check...');
     executeSafeLiveTleFetch().then(() => {
       broadcastWsMessage({
         type: 'conjunction_update',
@@ -319,6 +321,7 @@ async function startServer() {
   });
   app.use('/api/tle/fetch', heavyComputationLimiter);
   app.use('/api/tle/demo', heavyComputationLimiter);
+  app.use('/api/tle/import', heavyComputationLimiter);
   app.use('/api/analyze', heavyComputationLimiter);
   app.use('/api/conjunctions/:id/assess', heavyComputationLimiter);
   app.use('/api/conjunctions/csv', heavyComputationLimiter);
@@ -556,6 +559,7 @@ async function startServer() {
       leoCount: currentTles.length,
       invalidCount: meta?.invalidCount || 0,
       nonLeoCount: meta?.nonLeoCount || 0,
+      circuitBreaker: getCircuitBreakerStatus(),
       timestamp: new Date().toISOString()
     });
   });
@@ -577,7 +581,8 @@ async function startServer() {
       invalidCount: meta?.invalidCount || 0,
       nonLeoCount: meta?.nonLeoCount || 0,
       activeSnapshotId: meta?.id || 'none',
-      isFallback: !isLive || state === 'STALE_SNAPSHOT' || state === 'CRITICAL_STALE'
+      isFallback: !isLive || state === 'STALE_SNAPSHOT' || state === 'CRITICAL_STALE',
+      circuitBreaker: getCircuitBreakerStatus()
     };
     res.json(response);
   });
@@ -663,6 +668,42 @@ async function startServer() {
       });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err?.message });
+    }
+  });
+
+  app.post('/api/tle/import', async (req, res) => {
+    try {
+      const { content, sourceLabel } = req.body || {};
+      if (!content || typeof content !== 'string') {
+        return res.status(400).json({ success: false, error: 'Missing or invalid "content" in request body' });
+      }
+
+      const result = await ingestRawTleContent(content, sourceLabel || 'Manual Import');
+      currentTles = result.records;
+      currentSnapshotMetadata = result.snapshot;
+      activeSource = `${sourceLabel || 'Manual Import'} (Custom Ingestion)`;
+      refreshSatrecCache();
+
+      lastAnalysisDate = new Date();
+      currentConjunctions = detectConjunctions(currentTles, activeConfig, lastAnalysisDate);
+
+      broadcastWsMessage({
+        type: 'conjunction_update',
+        status: getSystemStatus(),
+        objects: getObjectsSummaries(lastAnalysisDate, true),
+        conjunctions: currentConjunctions,
+        timestamp: Date.now()
+      });
+
+      res.json({
+        success: true,
+        count: currentTles.length,
+        source: activeSource,
+        snapshotId: result.snapshot.id,
+        conjunctionsCount: currentConjunctions.length
+      });
+    } catch (err: any) {
+      res.status(400).json({ success: false, error: err?.message || 'Failed to import TLE data' });
     }
   });
 
