@@ -1,0 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+:root { font-family: Manrope, Arial, sans-serif; color: #edf2ec; background: #071019; }
+html, body, #root { min-height: 100%; }
+body { margin: 0; }
+button, a { -webkit-tap-highlight-color: transparent; }
+.atmosphere { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle at 75% 42%, rgba(94, 129, 91, .16), transparent 24%), radial-gradient(circle at 88% 90%, rgba(201, 217, 138, .08), transparent 28%), linear-gradient(118deg, #071019 0%, #071019 55%, #0d1920 100%); }
+.earth-banner { position: absolute; top: 0; left: 0; right: 0; height: 68vh; max-height: 720px; pointer-events: none; z-index: 0; background-position: center 22%; background-size: cover; background-repeat: no-repeat; filter: blur(1px) saturate(2) brightness(.82); -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,.9) 0%, rgba(0,0,0,.6) 42%, rgba(0,0,0,.25) 72%, transparent 100%); mask-image: linear-gradient(180deg, rgba(0,0,0,.9) 0%, rgba(0,0,0,.6) 42%, rgba(0,0,0,.25) 72%, transparent 100%); }
+.earth-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, rgba(7,16,25,.82) 0%, rgba(7,16,25,.5) 34%, rgba(7,16,25,.28) 100%), radial-gradient(120% 90% at 78% 8%, rgba(94,129,91,.14), transparent 55%); }
+@media (max-width: 640px) { .atmosphere { background: radial-gradient(circle at 90% 35%, rgba(94,129,91,.14), transparent 40%), #071019; } }
