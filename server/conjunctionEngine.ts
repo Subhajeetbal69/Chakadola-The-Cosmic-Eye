@@ -22,9 +22,10 @@ export const DEFAULT_CONFIG: SystemConfig = {
   timeStepSeconds: 60,
   distanceThresholdKm: 15,
   riskWeights: {
-    distance: 0.60,
+    distance: 0.45,
     velocity: 0.25,
-    time: 0.15
+    time: 0.20,
+    leoContext: 0.10
   },
   riskThresholds: {
     critical: 80,
@@ -54,82 +55,132 @@ export function calculateRelativeVelocity(v1: Vector3D, v2: Vector3D): number {
 }
 
 /**
- * Computes explainable risk score according to prompt specification
+ * Computes physically & statistically grounded multi-factor LEO risk score
  */
 export function calculateRiskScore(
   minDistanceKm: number,
   relativeVelocityKmS: number,
   timeToEventHours: number,
+  tcaAltitudeKm: number = 550,
   config: SystemConfig = DEFAULT_CONFIG
 ): RiskScoreBreakdown {
   
-  // 1. Distance Risk Score (Polynomial Decay)
-  // Holds at 100 for < 1km, then decays smoothly to 0 at the threshold.
+  // 1. Miss Distance Risk Score (45% weight)
+  // Quadratic decay: 100 for <= 1.0 km, decaying smoothly to 0 at distanceThresholdKm (15 km)
   let distanceScore = 0;
-  if (minDistanceKm < 1.0) {
+  if (minDistanceKm <= 1.0) {
     distanceScore = 100;
   } else {
-    // Normalizing the distance between 1.0 and the threshold
-    const effectiveRange = config.distanceThresholdKm - 1.0;
+    const effectiveRange = Math.max(1.0, config.distanceThresholdKm - 1.0);
     const normalizedDistance = Math.max(0, 1 - ((minDistanceKm - 1.0) / effectiveRange));
     distanceScore = 100 * Math.pow(normalizedDistance, 2);
   }
 
-  // 2. Relative Velocity Contribution (Quadratic Scaling)
-  // Based on original code capping at 10.0 km/s.
-  // Using Math.max(10, ...) preserves original minimum baseline score of 10.
-  const maxVelocityKmS = 10.0;
-  const velocityRatio = Math.min(1.0, relativeVelocityKmS / maxVelocityKmS);
-  const velocityScore = Math.max(10, 100 * Math.pow(velocityRatio, 2));
+  // 2. Collision Severity / Kinetic Energy (25% weight)
+  // Evaluates kinetic energy potential Ek ~ v_rel^2 over 0-14 km/s scale
+  const maxVelocityKmS = 14.0;
+  const velocityRatio = Math.min(1.0, Math.max(0, relativeVelocityKmS / maxVelocityKmS));
+  const severityScore = Math.min(100, Math.max(10, 100 * Math.pow(velocityRatio, 2)));
 
-  // 3. Time-to-Event Contribution (Exponential Decay)
-  // Holds at 100 for < 1 hour. 
-  // A decay rate of 0.052 perfectly hits a score of ~30 at 24 hours, matching original logic.
-  let timeScore = 0;
-  if (timeToEventHours < 1.0) {
-    timeScore = 100;
-  } else {
-    const timeDecayRate = 0.052; 
-    timeScore = 100 * Math.exp(-timeDecayRate * (timeToEventHours - 1.0));
-    // Ensures a minimum floor score of 5, matching original long-tail logic
-    timeScore = Math.max(5, timeScore);
+  let severityLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXTREME' = 'LOW';
+  if (severityScore >= 80) {
+    severityLevel = 'EXTREME';
+  } else if (severityScore >= 50) {
+    severityLevel = 'HIGH';
+  } else if (severityScore >= 25) {
+    severityLevel = 'MEDIUM';
   }
 
-  // 4. Weighted Combination
-  const wDist = config.riskWeights.distance;
-  const wVel = config.riskWeights.velocity;
-  const wTime = config.riskWeights.time;
+  // 3. Operational Urgency / TCA (20% weight)
+  // Exponential decay: 100 for <= 1.0 hour, ~30 at 24 hours
+  let urgencyScore = 0;
+  if (timeToEventHours <= 1.0) {
+    urgencyScore = 100;
+  } else {
+    const timeDecayRate = 0.052;
+    urgencyScore = 100 * Math.exp(-timeDecayRate * (timeToEventHours - 1.0));
+    urgencyScore = Math.max(5, urgencyScore);
+  }
 
-  const rawFinalScore = wDist * distanceScore + wVel * velocityScore + wTime * timeScore;
+  let urgencyLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
+  if (urgencyScore >= 80) {
+    urgencyLevel = 'CRITICAL';
+  } else if (urgencyScore >= 50) {
+    urgencyLevel = 'HIGH';
+  } else if (urgencyScore >= 25) {
+    urgencyLevel = 'MEDIUM';
+  }
+
+  // 4. LEO Orbital Shell Density Context (10% weight)
+  const altKm = typeof tcaAltitudeKm === 'number' && !isNaN(tcaAltitudeKm) ? tcaAltitudeKm : 550;
+  let leoContextScore = 50;
+  let leoBand: 'VERY_LOW_LEO' | 'CORE_CONSTELLATION_LEO' | 'MID_LEO' | 'UPPER_LEO' = 'CORE_CONSTELLATION_LEO';
+
+  if (altKm < 350) {
+    leoContextScore = 40; // Very Low LEO (strong atmospheric drag cleans debris quickly)
+    leoBand = 'VERY_LOW_LEO';
+  } else if (altKm <= 600) {
+    leoContextScore = 95; // Core Constellation LEO (Starlink / high operational traffic)
+    leoBand = 'CORE_CONSTELLATION_LEO';
+  } else if (altKm <= 1000) {
+    leoContextScore = 85; // Mid LEO (Sun-synchronous, Iridium, Fengyun-1C & Cosmos debris bands)
+    leoBand = 'MID_LEO';
+  } else {
+    leoContextScore = 50; // Upper LEO (1000 - 2000 km, lower density)
+    leoBand = 'UPPER_LEO';
+  }
+
+  // Weights
+  const wDist = config?.riskWeights?.distance ?? 0.45;
+  const wSev = config?.riskWeights?.velocity ?? 0.25;
+  const wUrg = config?.riskWeights?.time ?? 0.20;
+  const wLeo = config?.riskWeights?.leoContext ?? 0.10;
+
+  const rawFinalScore = (wDist * distanceScore) + (wSev * severityScore) + (wUrg * urgencyScore) + (wLeo * leoContextScore);
   const finalRiskScore = Math.min(100, Math.max(0, Number(rawFinalScore.toFixed(1))));
 
-  // 5. Risk Level Evaluation
+  const critThreshold = config?.riskThresholds?.critical ?? 80;
+  const highThreshold = config?.riskThresholds?.high ?? 60;
+  const medThreshold = config?.riskThresholds?.medium ?? 30;
+
   let riskLevel: RiskLevel = 'LOW';
-  if (finalRiskScore >= config.riskThresholds.critical) {
+  if (finalRiskScore >= critThreshold) {
     riskLevel = 'CRITICAL';
-  } else if (finalRiskScore >= config.riskThresholds.high) {
+  } else if (finalRiskScore >= highThreshold) {
     riskLevel = 'HIGH';
-  } else if (finalRiskScore >= config.riskThresholds.medium) {
+  } else if (finalRiskScore >= medThreshold) {
     riskLevel = 'MEDIUM';
   }
 
-  const formulaDescription = `${(wDist * 100).toFixed(0)}% × [Dist: ${distanceScore.toFixed(0)}] + ${(wVel * 100).toFixed(0)}% × [Vel: ${velocityScore.toFixed(0)}] + ${(wTime * 100).toFixed(0)}% × [Time: ${timeScore.toFixed(0)}] = ${finalRiskScore}`;
+  const formulaDescription = `${(wDist * 100).toFixed(0)}% × [Dist: ${distanceScore.toFixed(0)}] + ${(wSev * 100).toFixed(0)}% × [Sev: ${severityScore.toFixed(0)}] + ${(wUrg * 100).toFixed(0)}% × [Urg: ${urgencyScore.toFixed(0)}] + ${(wLeo * 100).toFixed(0)}% × [LEO: ${leoContextScore.toFixed(0)}] = ${finalRiskScore}`;
 
   return {
     rawDistanceKm: Number(minDistanceKm.toFixed(3)),
     distanceScore: Number(distanceScore.toFixed(1)),
     distanceWeight: wDist,
     relativeVelocityKmS: Number(relativeVelocityKmS.toFixed(2)),
-    velocityScore: Number(velocityScore.toFixed(1)),
-    velocityWeight: wVel,
+    severityScore: Number(severityScore.toFixed(1)),
+    severityWeight: wSev,
+    severityLevel,
     timeToEventHours: Number(timeToEventHours.toFixed(2)),
-    timeScore: Number(timeScore.toFixed(1)),
-    timeWeight: wTime,
+    urgencyScore: Number(urgencyScore.toFixed(1)),
+    urgencyWeight: wUrg,
+    urgencyLevel,
+    leoContextScore: Number(leoContextScore.toFixed(1)),
+    leoContextWeight: wLeo,
+    leoBand,
+    tcaAltitudeKm: Number(altKm.toFixed(1)),
+    // Backwards compatibility aliases
+    velocityScore: Number(severityScore.toFixed(1)),
+    velocityWeight: wSev,
+    timeScore: Number(urgencyScore.toFixed(1)),
+    timeWeight: wUrg,
     finalRiskScore,
     riskLevel,
     formulaDescription
   };
 }
+
 
 /**
  * Refines the closest approach around an initial detected timestamp using 1-second sub-stepping
@@ -209,7 +260,13 @@ export function detectConjunctions(
   config: SystemConfig = DEFAULT_CONFIG,
   startDate: Date = new Date()
 ): ConjunctionEvent[] {
-  const wrappers = tleRecords.map((r) => createSatrec(r)).filter((w) => w.isValid);
+  // Enforce strict LEO invariant: only LEO objects enter the conjunction pipeline
+  const nonLeoObjects = tleRecords.filter((r) => r.orbitClass && r.orbitClass !== 'LEO');
+  if (nonLeoObjects.length > 0) {
+    console.warn(`[Conjunction Engine] Invariant Check: Pruning ${nonLeoObjects.length} non-LEO objects before analysis.`);
+  }
+  const leoRecords = tleRecords.filter((r) => !r.orbitClass || r.orbitClass === 'LEO');
+  const wrappers = leoRecords.map((r) => createSatrec(r)).filter((w) => w.isValid);
   const n = wrappers.length;
   const perfStart = Date.now();
   console.log(`[Conjunction Engine] Starting multi-stage analysis for ${n} objects...`);
@@ -365,84 +422,17 @@ export function detectConjunctions(
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // Stage 4: Temporal Spatial Hash Precomputation
-  // ═══════════════════════════════════════════════════════════════
-  const numCoarseSamples = 6;
-  const CELL_SIZE = 200; // km
-  const spatialHashes = new Array<{cx: number, cy: number, cz: number}[]>(candidateList.length);
-  
-  for (let i = 0; i < candidateList.length; i++) {
-    const record = candidateList[i].wrapper.record;
-    const incRad = (record.inclinationDeg * Math.PI) / 180;
-    const raanRad = (record.raanDeg * Math.PI) / 180;
-    const argPerRad = (record.argPerigeeDeg * Math.PI) / 180;
-    const ecc = Math.max(0.00001, Math.min(0.95, record.eccentricity));
-    const meanMotionRevDay = Math.max(0.1, record.meanMotionRevDay || 15.0);
-    const nRadSec = (meanMotionRevDay * 2 * Math.PI) / 86400;
-    const aKm = Math.pow(MU_EARTH_LOCAL / (nRadSec * nRadSec), 1 / 3);
-    const epochYear = record.epochYear || 2026;
-    const epochDay = record.epochDay || 1;
-    const epochMs = Date.UTC(epochYear, 0, 1) + (epochDay - 1) * 86400 * 1000;
-
-    const cosO = Math.cos(raanRad); const sinO = Math.sin(raanRad);
-    const cosi = Math.cos(incRad);  const sini = Math.sin(incRad);
-    const cosw = Math.cos(argPerRad); const sinw = Math.sin(argPerRad);
-    const Px = cosO * cosw - sinO * sinw * cosi;
-    const Py = sinO * cosw + cosO * sinw * cosi;
-    const Pz = sinw * sini;
-    const Qx = -cosO * sinw - sinO * cosw * cosi;
-    const Qy = -sinO * sinw + cosO * cosw * cosi;
-    const Qz = cosw * sini;
-
-    const initialM = ((record.meanAnomalyDeg || 0) * Math.PI) / 180;
-    const sqrtOneMinusEccSq = Math.sqrt(1 - ecc * ecc);
-    const hashes = [];
-    const step = (config.predictionHours * 3600 * 1000) / (numCoarseSamples - 1);
-    
-    for (let s = 0; s < numCoarseSamples; s++) {
-      const dtSeconds = (startMs + s * step - epochMs) / 1000;
-      let M = (initialM + nRadSec * dtSeconds) % (2 * Math.PI);
-      if (M < 0) M += 2 * Math.PI;
-
-      let E = M;
-      for (let iter = 0; iter < 10; iter++) {
-        const sinE = Math.sin(E);
-        const cosE = Math.cos(E);
-        const delta = (E - ecc * sinE - M) / (1 - ecc * cosE);
-        E -= delta;
-        if (Math.abs(delta) < 1e-8) break;
-      }
-      
-      const cosE = Math.cos(E);
-      const sinE = Math.sin(E);
-      const denom = 1 - ecc * cosE;
-      const r = Math.max(EARTH_RADIUS_KM + 120, aKm * (1 - ecc * cosE));
-      const xp = r * ((cosE - ecc) / denom);
-      const yp = r * ((sqrtOneMinusEccSq * sinE) / denom);
-      hashes.push({
-        cx: Math.floor((xp * Px + yp * Qx) / CELL_SIZE),
-        cy: Math.floor((xp * Py + yp * Qy) / CELL_SIZE),
-        cz: Math.floor((xp * Pz + yp * Qz) / CELL_SIZE)
-      });
-    }
-    spatialHashes[i] = hashes;
-  }
-
-  // ═══════════════════════════════════════════════════════════════
   // Pipelined pair generation + trajectory screening
-  //   Stage 1: Debris/RocketBody mutual exclusion
+  //   Stage 1: Debris/RocketBody mutual collision exclusion
   //   Stage 2: Apogee/Perigee altitude shell overlap (sweep-and-prune)
-  //   Stage 3: 4D Sieve (RAAN + Inclination + orbital geometry)
-  //   Stage 4: Temporal Spatial Hash Sieve
-  //   Stage 5: Coarse Trajectory Scan
-  //   Stage 6: Full Keplerian trajectory distance screening
+  //   Stage 3: 4D Sieve (RAAN + Inclination orbital geometry)
+  //   Stage 4: Fast Keplerian trajectory distance screening (squared distance)
+  //   Stage 5: SGP4-based sub-second refinement for close approach
   // ═══════════════════════════════════════════════════════════════
   let stage1Skipped = 0;
   let stage3Skipped = 0;
-  let stage4Skipped = 0;
-  let stage5Skipped = 0;
-  let stage6Checked = 0;
-  let stage6Passed = 0;
+  let stage4Checked = 0;
+  let stage4Passed = 0;
 
   interface RefinementCandidate {
     objA: CandidateObj;
@@ -466,7 +456,7 @@ export function detectConjunctions(
 
       // ── Stage 1: Skip debris/rocketbody mutual collisions ──
       // Only pairs involving at least one active satellite or special
-      // object are considered (DEBRIS×DEBRIS, DEBRIS×RB, RB×RB skipped).
+      // object are prioritized in large fleet scans (DEBRIS×DEBRIS skipped).
       const isJunkB = objB.classification === 'DEBRIS' || objB.classification === 'ROCKET_BODY';
       if (isJunkA && isJunkB) {
         stage1Skipped++;
@@ -492,7 +482,7 @@ export function detectConjunctions(
       // 3a: Orbital planes geometrically incompatible —
       //     large inclination AND large RAAN separation means the
       //     orbital planes diverge too much for a close approach.
-      if (incDiff > 20 && raanDiff > 90) {
+      if (incDiff > 30 && raanDiff > 90) {
         stage3Skipped++;
         continue;
       }
@@ -501,66 +491,18 @@ export function detectConjunctions(
       //     nearly identical circular orbits maintaining station-keeping
       //     separation (same altitude, inclination, RAAN).
       if (objA.ecc < 0.01 && objB.ecc < 0.01 &&
-          Math.abs(objA.maxR - objB.maxR) < 2 && incDiff < 0.5 && raanDiff < 2) {
+          Math.abs(objA.maxR - objB.maxR) < 2 && incDiff < 0.5 && raanDiff < 2 &&
+          objA.classification === 'ACTIVE_SATELLITE' && objB.classification === 'ACTIVE_SATELLITE') {
         stage3Skipped++;
         continue;
       }
 
-      // 3c: High-inclination orbits with large RAAN separation
-      //     and minimal altitude overlap at the node crossing.
-      if (objA.inc > 45 && objB.inc > 45 && raanDiff > 45) {
-        const altOverlap = Math.min(objA.maxR, objB.maxR) - Math.max(objA.minR, objB.minR);
-        if (altOverlap < thresholdKm * 0.5) {
-          stage3Skipped++;
-          continue;
-        }
-      }
-
-      // ── Stage 4: Temporal Spatial Hash Sieve ──
-      let hashPassed = false;
-      const hashesA = spatialHashes[i];
-      const hashesB = spatialHashes[j];
-      for (let s = 0; s < numCoarseSamples; s++) {
-        const cA = hashesA[s];
-        const cB = hashesB[s];
-        if (Math.abs(cA.cx - cB.cx) <= 1 && 
-            Math.abs(cA.cy - cB.cy) <= 1 && 
-            Math.abs(cA.cz - cB.cz) <= 1) {
-          hashPassed = true;
-          break;
-        }
-      }
-      if (!hashPassed) {
-        stage4Skipped++;
-        continue;
-      }
-
-      // ── Stage 5: Coarse Trajectory Scan ──
+      // ── Stage 4: Full Fast Keplerian Trajectory Distance Screening ──
       // Lazy-load objA trajectory (stays cached for all j in this i-loop)
       if (!trajA) trajA = getCachedTraj(objA);
       const trajB = getCachedTraj(objB);
-      
-      let coarseMinDistSq = Infinity;
-      const coarseStep = Math.max(1, Math.floor(600 / config.timeStepSeconds)); // 10-minute steps
-      for (let k = 0; k <= totalSteps; k += coarseStep) {
-        const dx = trajA[k].x - trajB[k].x;
-        const dy = trajA[k].y - trajB[k].y;
-        const dz = trajA[k].z - trajB[k].z;
-        const dSq = dx * dx + dy * dy + dz * dz;
-        if (dSq < coarseMinDistSq) {
-          coarseMinDistSq = dSq;
-        }
-      }
 
-      const thresholdSq = thresholdKm * thresholdKm;
-      // Only proceed to full narrow-phase if coarse pass shows promise
-      if (coarseMinDistSq > thresholdSq * 16) { // 4x threshold margin
-        stage5Skipped++;
-        continue;
-      }
-
-      // ── Stage 6: Full Trajectory Distance Screening ──
-      stage6Checked++;
+      stage4Checked++;
       let minDistSq = Infinity;
       let minIdx = -1;
 
@@ -578,7 +520,7 @@ export function detectConjunctions(
       }
 
       if (minDistSq <= SCREENING_THRESHOLD_SQ && minIdx >= 0) {
-        stage6Passed++;
+        stage4Passed++;
         refinementList.push({ objA, objB, minTimeIdx: minIdx });
       }
     }
@@ -593,9 +535,7 @@ export function detectConjunctions(
   console.log(`[Conjunction Engine] Filtering complete in ${filterTimeS}s:`);
   console.log(`  Stage 1 (Junk exclusion): ${stage1Skipped.toLocaleString()} pairs skipped`);
   console.log(`  Stage 3 (4D sieve):       ${stage3Skipped.toLocaleString()} pairs skipped`);
-  console.log(`  Stage 4 (Spatial Hash):   ${stage4Skipped.toLocaleString()} pairs skipped`);
-  console.log(`  Stage 5 (Coarse Scan):    ${stage5Skipped.toLocaleString()} pairs skipped`);
-  console.log(`  Stage 6 (Trajectory):     ${stage6Checked.toLocaleString()} checked → ${stage6Passed.toLocaleString()} within ${Math.sqrt(SCREENING_THRESHOLD_SQ)} km screen`);
+  console.log(`  Stage 4 (Trajectory):     ${stage4Checked.toLocaleString()} checked → ${stage4Passed.toLocaleString()} within ${Math.sqrt(SCREENING_THRESHOLD_SQ)} km screen`);
 
   // Free Keplerian trajectory cache before SGP4 refinement
   trajCache.clear();
@@ -617,7 +557,9 @@ export function detectConjunctions(
 
     if (refined.minDistance <= config.distanceThresholdKm) {
       const timeToEventHours = Math.max(0, (refined.tcaDate.getTime() - startMs) / (1000 * 3600));
-      const breakdown = calculateRiskScore(refined.minDistance, refined.relVel, timeToEventHours, config);
+      const posMag = Math.sqrt(refined.posA.x * refined.posA.x + refined.posA.y * refined.posA.y + refined.posA.z * refined.posA.z);
+      const tcaAltKm = Math.max(0, posMag - EARTH_RADIUS_KM);
+      const breakdown = calculateRiskScore(refined.minDistance, refined.relVel, timeToEventHours, tcaAltKm, config);
 
       const summaryA = getObjectSummary(wA, startDate, true);
       const summaryB = getObjectSummary(wB, startDate, true);
@@ -644,35 +586,42 @@ export function detectConjunctions(
   console.log(`[Conjunction Engine] Refinement: ${refinementList.length} candidates → ${events.length} confirmed events (${refineTimeS}s)`);
 
   // ═══════════════════════════════════════════════════════════════
-  // Synthetic fallback: ensure minimum conjunction events for
-  // high-priority active constellations vs debris/rocket bodies
+  // Synthetic fallback: strictly activates ONLY when engine detects 0
+  // natural conjunction events across candidate pairs
   // ═══════════════════════════════════════════════════════════════
-  if (events.length < 5 && wrappers.length >= 2) {
+  if (events.length === 0 && wrappers.length >= 2) {
+    console.log(`[Conjunction Engine] ⚠️ NOTICE: No natural conjunction events detected (0 events found). Activating synthetic fallback generator to provide baseline high-priority hazard scenarios.`);
     const activeWrappers = wrappers.filter((w) => w.record.classification === 'ACTIVE_SATELLITE');
     const hazardWrappers = wrappers.filter((w) => w.record.classification === 'DEBRIS' || w.record.classification === 'ROCKET_BODY');
+    const primaryList = activeWrappers.length > 0 ? activeWrappers : wrappers;
     const secondaryList = hazardWrappers.length > 0 ? hazardWrappers : wrappers.slice(1);
 
     const baseOffsets = [1.85, 3.40, 6.75, 11.20, 15.80, 19.45, 22.10];
     const baseMissDists = [0.42, 1.15, 2.30, 3.85, 5.40, 7.60, 9.80];
 
-    const count = Math.min(Math.max(activeWrappers.length, 1), secondaryList.length, baseOffsets.length);
-    for (let idx = 0; idx < count; idx++) {
-      const wA = activeWrappers[idx % activeWrappers.length] || wrappers[0];
-      const wB = secondaryList[idx % secondaryList.length];
-      if (wA.record.id === wB.record.id) continue;
+    const maxScenarios = Math.min(baseOffsets.length, Math.max(primaryList.length, secondaryList.length, 5));
+    for (let idx = 0; idx < maxScenarios; idx++) {
+      const wA = primaryList[idx % primaryList.length];
+      let wB = secondaryList[idx % secondaryList.length];
+      if (wA.record.id === wB.record.id) {
+        wB = secondaryList[(idx + 1) % secondaryList.length] || wrappers[(idx + 1) % wrappers.length];
+      }
+      if (!wB || wA.record.id === wB.record.id) continue;
 
       const eventId = `CONJ-${wA.record.id}-${wB.record.id}`;
       if (events.some((e) => e.id === eventId)) continue;
 
-      const offsetH = baseOffsets[idx];
-      const missKm = baseMissDists[idx];
+      const offsetH = baseOffsets[idx % baseOffsets.length];
+      const missKm = baseMissDists[idx % baseMissDists.length];
 
       const tcaDate = new Date(startMs + offsetH * 3600 * 1000);
       const ptA = propagateAtTime(wA, tcaDate);
       const ptB = propagateAtTime(wB, tcaDate);
       const relVel = Math.max(7.2, calculateRelativeVelocity(ptA.velocity, ptB.velocity));
 
-      const breakdown = calculateRiskScore(missKm, relVel, offsetH, config);
+      const posMag = Math.sqrt(ptA.position.x * ptA.position.x + ptA.position.y * ptA.position.y + ptA.position.z * ptA.position.z);
+      const tcaAltKm = Math.max(0, posMag - EARTH_RADIUS_KM);
+      const breakdown = calculateRiskScore(missKm, relVel, offsetH, tcaAltKm, config);
       const summaryA = getObjectSummary(wA, startDate, true);
       const summaryB = getObjectSummary(wB, startDate, true);
 
@@ -691,11 +640,14 @@ export function detectConjunctions(
         positionAAtTca: ptA.position,
         positionBAtTca: ptB.position
       });
+
+      if (events.length >= 7) break;
     }
   }
 
   // Sort descending by risk score
   events.sort((a, b) => b.riskScore - a.riskScore);
+
   const totalTimeS = ((Date.now() - perfStart) / 1000).toFixed(1);
   console.log(`[Conjunction Engine] Complete in ${totalTimeS}s. Found ${events.length} conjunction events.`);
   return events;

@@ -13,12 +13,15 @@ import {
   ConjunctionEvent,
   SystemStatus,
   TrackedObjectSummary,
-  LiveTelemetryObject
+  LiveTelemetryObject,
+  SnapshotMetadata,
+  DataStatusResponse,
+  FreshnessState
 } from './src/types';
 import {
   fetchLiveTleData,
   createDeterministicDemoScenario,
-  loadSampleTleDataset
+  bootstrapInitialSnapshot
 } from './server/tleFetcher';
 import {
   detectConjunctions,
@@ -33,11 +36,21 @@ import {
   getObjectSummary,
   propagateAtTime
 } from './server/propagator';
-import { getDb, loadAllTles, saveTleRecords, setMetadata, getMetadata } from './server/db';
+import {
+  getDb,
+  loadActiveSnapshot,
+  getActiveSnapshotMetadata,
+  saveNewSnapshot,
+  setMetadata,
+  getMetadata,
+  getSnapshotList,
+  rollbackToSnapshot
+} from './server/db';
 import { getConjunctionAssessment } from './server/ai/aiServices';
 
 let currentTles: TleRecord[] = [];
 let currentConjunctions: ConjunctionEvent[] = [];
+let currentSnapshotMetadata: SnapshotMetadata | null = null;
 let activeConfig: SystemConfig = { ...DEFAULT_CONFIG };
 let activeSource = 'Curated Reference Fleet (Offline)';
 let lastAnalysisDate: Date = new Date();
@@ -47,6 +60,25 @@ let wss: WebSocketServer | null = null;
 let activeAnalysisPromise: Promise<ConjunctionEvent[]> | null = null;
 let activeTleFetchPromise: Promise<any> | null = null;
 const aiAssessmentCache = new Map<string, { data: any; expiresAt: number }>();
+
+function calculateFreshnessState(snapshot: SnapshotMetadata | null, isLive: boolean): { state: FreshnessState; ageSeconds: number } {
+  if (!snapshot) {
+    return { state: 'NO_DATA', ageSeconds: 0 };
+  }
+  const fetchedMs = new Date(snapshot.fetchedAt).getTime();
+  const ageSeconds = Math.max(0, Math.floor((Date.now() - fetchedMs) / 1000));
+
+  if (isLive && ageSeconds < 30 * 60) {
+    return { state: 'LIVE', ageSeconds };
+  }
+  if (ageSeconds < 2 * 3600) {
+    return { state: 'FRESH_SNAPSHOT', ageSeconds };
+  }
+  if (ageSeconds < 24 * 3600) {
+    return { state: 'STALE_SNAPSHOT', ageSeconds };
+  }
+  return { state: 'CRITICAL_STALE', ageSeconds };
+}
 
 async function executeSafeConjunctionDetection(): Promise<ConjunctionEvent[]> {
   if (activeAnalysisPromise) {
@@ -72,6 +104,7 @@ async function executeSafeLiveTleFetch(): Promise<any> {
     try {
       const result = await fetchLiveTleData();
       currentTles = result.records;
+      currentSnapshotMetadata = result.snapshot;
       activeSource = result.source;
       refreshSatrecCache();
       await executeSafeConjunctionDetection();
@@ -97,6 +130,8 @@ function getSystemStatus(): SystemStatus {
   const activeSats = currentTles.filter((t) => t.classification === 'ACTIVE_SATELLITE').length;
   const debris = currentTles.filter((t) => t.classification === 'DEBRIS').length;
   const rocketBodies = currentTles.filter((t) => t.classification === 'ROCKET_BODY').length;
+  const isLive = activeSource.includes('Live') || activeSource.includes('CelesTrak');
+  const { state } = calculateFreshnessState(currentSnapshotMetadata, isLive);
 
   return {
     lastDataUpdate: lastAnalysisDate.toISOString(),
@@ -110,8 +145,10 @@ function getSystemStatus(): SystemStatus {
     activeSource,
     config: activeConfig,
     lastSyncTimestamp: lastAnalysisDate.getTime(),
-    isLiveCelesTrak: activeSource.includes('CelesTrak'),
-    wsConnectedClients: wss ? wss.clients.size : 0
+    isLiveCelesTrak: isLive,
+    wsConnectedClients: wss ? wss.clients.size : 0,
+    snapshotMetadata: currentSnapshotMetadata || undefined,
+    freshnessState: state
   };
 }
 
@@ -140,6 +177,7 @@ function getLiveTelemetryList(date: Date = new Date(), limit: number = 2000, off
         id: summary.id,
         name: summary.name,
         classification: summary.classification,
+        orbitClass: summary.orbitClass || 'LEO',
         noradId: summary.noradId,
         pos: summary.currentPosition,
         vel: summary.currentVelocity,
@@ -162,6 +200,7 @@ function getLiveTelemetryList(date: Date = new Date(), limit: number = 2000, off
         id: summary.id,
         name: summary.name,
         classification: summary.classification,
+        orbitClass: summary.orbitClass || 'LEO',
         noradId: summary.noradId,
         pos: summary.currentPosition,
         vel: summary.currentVelocity,
@@ -203,19 +242,21 @@ function broadcastWsMessage(data: any) {
 
 async function initCoreEngine() {
   await getDb();
-  const baseMasterRecords = loadSampleTleDataset();
-  const dbRecords = await loadAllTles();
-  
-  if (dbRecords.length >= 1000) {
-    currentTles = dbRecords;
-    activeSource = await getMetadata('active_source', 'Catalog Telemetry (Live Astrodynamics Propagation)');
-  } else if (baseMasterRecords.length > 0) {
-    currentTles = baseMasterRecords;
-    await saveTleRecords(currentTles);
-    activeSource = 'Catalog Telemetry (Live Astrodynamics Propagation)';
+  const activeSnap = await loadActiveSnapshot();
+
+  if (activeSnap.records.length > 0 && activeSnap.metadata) {
+    currentTles = activeSnap.records;
+    currentSnapshotMetadata = activeSnap.metadata;
+    activeSource = activeSnap.metadata.source === 'CELESTRAK'
+      ? 'CelesTrak (Live LEO Ingestion)'
+      : `${activeSnap.metadata.source} (Active LEO Snapshot)`;
+    console.log(`[Core Engine] Loaded active LEO snapshot ${activeSnap.metadata.id} with ${currentTles.length} objects.`);
   } else {
-    currentTles = baseMasterRecords;
-    activeSource = 'Curated Reference Fleet (Offline)';
+    const boot = await bootstrapInitialSnapshot();
+    currentTles = boot.records;
+    currentSnapshotMetadata = boot.snapshot;
+    activeSource = 'Local LEO Baseline Snapshot';
+    console.log(`[Core Engine] ℹ️ Bootstrapped baseline LEO snapshot with ${currentTles.length} objects (Running in LOCAL BASELINE / DEMO mode).`);
   }
 
   refreshSatrecCache();
@@ -223,8 +264,26 @@ async function initCoreEngine() {
   // Run initial conjunction detection
   lastAnalysisDate = new Date();
   currentConjunctions = detectConjunctions(currentTles, activeConfig, lastAnalysisDate);
-  console.log(`[Core Engine] Initialized with ${currentTles.length} space objects and ${currentConjunctions.length} conjunction alerts.`);
+  console.log(`[Core Engine] Initialized with ${currentTles.length} LEO space objects and ${currentConjunctions.length} conjunction alerts.`);
+
+  // Background refresh daemon (every 15 minutes)
+  const TLE_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
+  setInterval(() => {
+    console.log('[Background Daemon] Polling CelesTrak for latest LEO orbital elements...');
+    executeSafeLiveTleFetch().then(() => {
+      broadcastWsMessage({
+        type: 'conjunction_update',
+        status: getSystemStatus(),
+        objects: getObjectsSummaries(lastAnalysisDate, true),
+        conjunctions: currentConjunctions,
+        timestamp: Date.now()
+      });
+    }).catch((err) => {
+      console.warn('[Background Daemon] Scheduled refresh error:', err);
+    });
+  }, TLE_REFRESH_INTERVAL_MS);
 }
+
 
 async function startServer() {
   const app = express();
@@ -390,12 +449,12 @@ async function startServer() {
         }
 
         if (msg.action === 'load_demo') {
-          const demoRecords = createDeterministicDemoScenario();
-          currentTles = demoRecords;
+          console.log('\n[Operator Notice] ⚠️ Fleet switched to DETERMINISTIC DEMO / FALLBACK MODE via WebSocket.');
+          const demo = await createDeterministicDemoScenario();
+          currentTles = demo.records;
+          currentSnapshotMetadata = demo.snapshot;
           activeSource = 'Deterministic Demo Conjunction Scenario';
           refreshSatrecCache();
-          await saveTleRecords(currentTles);
-          await setMetadata('active_source', activeSource);
 
           await executeSafeConjunctionDetection();
 
@@ -468,13 +527,64 @@ async function startServer() {
   }, 500);
 
   // API ROUTES
-  app.get('/api/health', (req, res) => {
+  app.get(['/health', '/api/health'], (req, res) => {
+    const isLive = activeSource.includes('Live') || activeSource.includes('CelesTrak');
+    const { state, ageSeconds } = calculateFreshnessState(currentSnapshotMetadata, isLive);
     res.json({
       status: 'ok',
       wsClients: wss?.clients.size || 0,
       trackedCount: currentTles.length,
+      activeSnapshotId: currentSnapshotMetadata?.id || null,
+      freshnessState: state,
+      ageSeconds,
       timestamp: new Date().toISOString()
     });
+  });
+
+  app.get(['/health/tle', '/api/health/tle'], async (req, res) => {
+    const active = await loadActiveSnapshot();
+    const meta = active.metadata || currentSnapshotMetadata;
+    const isLive = activeSource.includes('Live') || activeSource.includes('CelesTrak');
+    const { state, ageSeconds } = calculateFreshnessState(meta, isLive);
+    res.json({
+      status: 'ok',
+      reachability: 'OK',
+      activeSnapshotId: meta?.id || null,
+      source: meta?.source || 'UNKNOWN',
+      ageSeconds,
+      freshnessState: state,
+      leoCount: currentTles.length,
+      invalidCount: meta?.invalidCount || 0,
+      nonLeoCount: meta?.nonLeoCount || 0,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  app.get('/api/data-status', async (req, res) => {
+    const active = await loadActiveSnapshot();
+    const meta = active.metadata || currentSnapshotMetadata;
+    const isLive = activeSource.includes('Live') || activeSource.includes('CelesTrak');
+    const { state, ageSeconds } = calculateFreshnessState(meta, isLive);
+    const response: DataStatusResponse = {
+      mode: meta ? meta.source : 'NO_DATA',
+      source: activeSource,
+      fetchedAt: meta?.fetchedAt || new Date().toISOString(),
+      processedAt: meta?.processedAt || new Date().toISOString(),
+      ageSeconds,
+      freshnessState: state,
+      objectCount: currentTles.length,
+      totalFetched: meta?.totalFetched || currentTles.length,
+      invalidCount: meta?.invalidCount || 0,
+      nonLeoCount: meta?.nonLeoCount || 0,
+      activeSnapshotId: meta?.id || 'none',
+      isFallback: !isLive || state === 'STALE_SNAPSHOT' || state === 'CRITICAL_STALE'
+    };
+    res.json(response);
+  });
+
+  app.get('/api/snapshots', async (req, res) => {
+    const snapshots = await getSnapshotList();
+    res.json(snapshots);
   });
 
   app.get('/api/status', async (req, res) => {
@@ -494,7 +604,7 @@ async function startServer() {
     });
   });
 
-  app.get('/api/tle/fetch', async (req, res) => {
+  const handleTleFetch = async (req: express.Request, res: express.Response) => {
     try {
       const result = await executeSafeLiveTleFetch();
 
@@ -512,22 +622,26 @@ async function startServer() {
         count: currentTles.length,
         source: activeSource,
         isFallback: result.isFallback,
+        snapshotId: currentSnapshotMetadata?.id || null,
         conjunctionsCount: currentConjunctions.length
       });
     } catch (err: any) {
       console.error('[API /tle/fetch Error]', err);
       res.status(500).json({ success: false, error: err?.message || 'Failed fetching TLE data' });
     }
-  });
+  };
+
+  app.get('/api/tle/fetch', handleTleFetch);
+  app.post('/api/tle/fetch', handleTleFetch);
 
   app.post('/api/tle/demo', async (req, res) => {
     try {
-      const demoRecords = createDeterministicDemoScenario();
-      currentTles = demoRecords;
+      console.log('\n[Operator Notice] ⚠️ Fleet switched to DETERMINISTIC DEMO / FALLBACK MODE via HTTP API.');
+      const demo = await createDeterministicDemoScenario();
+      currentTles = demo.records;
+      currentSnapshotMetadata = demo.snapshot;
       activeSource = 'Deterministic Demo Conjunction Scenario';
       refreshSatrecCache();
-      await saveTleRecords(currentTles);
-      await setMetadata('active_source', activeSource);
 
       lastAnalysisDate = new Date();
       currentConjunctions = detectConjunctions(currentTles, activeConfig, lastAnalysisDate);
@@ -544,12 +658,14 @@ async function startServer() {
         success: true,
         count: currentTles.length,
         source: activeSource,
+        snapshotId: demo.snapshot.id,
         conjunctionsCount: currentConjunctions.length
       });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err?.message });
     }
   });
+
 
   app.get('/api/objects', (req, res) => {
     const { page, limit, search, type } = req.query;

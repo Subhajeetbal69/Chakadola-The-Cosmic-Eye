@@ -1,22 +1,19 @@
 import fs from 'fs';
 import path from 'path';
-import { TleRecord } from './types';
-import { parseTleRawText } from './tleParser';
-import { saveTleRecords, loadAllTles, setMetadata, getMetadata } from './db';
+import crypto from 'crypto';
+import { TleRecord, SnapshotMetadata } from './types';
+import { parseTleWithMetrics } from './tleParser';
+import { saveNewSnapshot, loadActiveSnapshot, setMetadata } from './db';
 
 const CATALOG_16063_PATH = path.join(process.cwd(), 'data', 'catalog_16063.tle');
 const SAMPLE_FILE_PATH = path.join(process.cwd(), 'server', 'sample_tles.txt');
+export const MINIMUM_LEO_OBJECTS_THRESHOLD = 100;
 
-// Comprehensive CelesTrak Group Endpoints covering active satellites, debris clouds, constellations & stations
-const CELESTRAK_URLS = [
+// High-Priority CelesTrak LEO Target Endpoints covering active constellations, stations & debris clouds
+const CELESTRAK_LEO_URLS = [
   'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle',
   'https://celestrak.org/NORAD/elements/gp.php?GROUP=stations&FORMAT=tle',
   'https://celestrak.org/NORAD/elements/gp.php?GROUP=visual&FORMAT=tle',
-  'https://celestrak.org/NORAD/elements/gp.php?GROUP=weather&FORMAT=tle',
-  'https://celestrak.org/NORAD/elements/gp.php?GROUP=resource&FORMAT=tle',
-  'https://celestrak.org/NORAD/elements/gp.php?GROUP=science&FORMAT=tle',
-  'https://celestrak.org/NORAD/elements/gp.php?GROUP=communications&FORMAT=tle',
-  'https://celestrak.org/NORAD/elements/gp.php?GROUP=gnss&FORMAT=tle',
   'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle',
   'https://celestrak.org/NORAD/elements/gp.php?GROUP=oneweb&FORMAT=tle',
   'https://celestrak.org/NORAD/elements/gp.php?GROUP=iridium-NEXT&FORMAT=tle',
@@ -28,61 +25,99 @@ const CELESTRAK_URLS = [
 ];
 
 /**
- * Loads the comprehensive master dataset from local disk (~16,063 objects)
+ * Loads baseline raw TLE content from local disk (used strictly for bootstrap fallback)
  */
-export function loadSampleTleDataset(): TleRecord[] {
+function readBootstrapRawContent(): string {
   try {
-    if (fs.existsSync(CATALOG_16063_PATH)) {
-      const content = fs.readFileSync(CATALOG_16063_PATH, 'utf8');
-      const records = parseTleRawText(content, 'SAMPLE_DATASET');
-      if (records.length > 0) {
-        return records;
-      }
-    }
     if (fs.existsSync(SAMPLE_FILE_PATH)) {
-      const content = fs.readFileSync(SAMPLE_FILE_PATH, 'utf8');
-      return parseTleRawText(content, 'SAMPLE_DATASET');
+      return fs.readFileSync(SAMPLE_FILE_PATH, 'utf8');
+    }
+    if (fs.existsSync(CATALOG_16063_PATH)) {
+      return fs.readFileSync(CATALOG_16063_PATH, 'utf8');
     }
   } catch (err) {
-    console.error('[TLE Fetcher] Failed loading TLE dataset:', err);
+    console.error('[TLE Fetcher] Failed reading bootstrap TLE file:', err);
   }
-  return [];
+  return '';
 }
 
 /**
- * Creates deterministic test conjunction scenario maintaining the full 16,063-object catalog
+ * Bootstraps an initial LEO snapshot into SQLite if the database is fresh/empty
  */
-export function createDeterministicDemoScenario(): TleRecord[] {
-  const baseRecords = loadSampleTleDataset();
-  const demoRecords = baseRecords.map((r) => ({
+export async function bootstrapInitialSnapshot(): Promise<{ records: TleRecord[]; snapshot: SnapshotMetadata }> {
+  const raw = readBootstrapRawContent();
+  const { records, metrics } = parseTleWithMetrics(raw, 'LOCAL_SNAPSHOT', true);
+
+  const snapId = `snap_boot_${Date.now()}`;
+  const nowIso = new Date().toISOString();
+  const hash = crypto.createHash('sha256').update(raw || 'empty').digest('hex').slice(0, 16);
+
+  const metadata: SnapshotMetadata = {
+    id: snapId,
+    source: 'LOCAL_SNAPSHOT',
+    fetchedAt: nowIso,
+    processedAt: nowIso,
+    objectCount: records.length,
+    totalFetched: metrics.validRecords + metrics.nonLeoRecords,
+    invalidCount: metrics.invalidChecksums,
+    nonLeoCount: metrics.nonLeoRecords,
+    dataHash: hash,
+    isActive: true,
+    status: 'ACTIVE'
+  };
+
+  console.log(`[TLE Fetcher] Bootstrapping initial LEO snapshot (${records.length} LEO objects, ${metrics.nonLeoRecords} non-LEO filtered).`);
+  await saveNewSnapshot(metadata, records);
+  return { records, snapshot: metadata };
+}
+
+/**
+ * Creates deterministic test conjunction scenario maintaining LEO invariant
+ */
+export async function createDeterministicDemoScenario(): Promise<{ records: TleRecord[]; snapshot: SnapshotMetadata }> {
+  const active = await loadActiveSnapshot();
+  let baseRecords = active.records;
+  if (baseRecords.length === 0) {
+    const boot = await bootstrapInitialSnapshot();
+    baseRecords = boot.records;
+  }
+
+  const snapId = `snap_demo_${Date.now()}`;
+  const nowIso = new Date().toISOString();
+  const demoRecords: TleRecord[] = baseRecords.map((r) => ({
     ...r,
     source: 'DEMO_CONJUNCTION' as const,
-    updatedAt: new Date().toISOString()
+    snapshotId: snapId,
+    updatedAt: nowIso
   }));
-  return demoRecords;
+
+  const hash = crypto.createHash('sha256').update(`demo_${snapId}`).digest('hex').slice(0, 16);
+  const metadata: SnapshotMetadata = {
+    id: snapId,
+    source: 'DEMO_SCENARIO',
+    fetchedAt: nowIso,
+    processedAt: nowIso,
+    objectCount: demoRecords.length,
+    totalFetched: demoRecords.length,
+    invalidCount: 0,
+    nonLeoCount: 0,
+    dataHash: hash,
+    isActive: true,
+    status: 'ACTIVE'
+  };
+
+  await saveNewSnapshot(metadata, demoRecords);
+  return { records: demoRecords, snapshot: metadata };
 }
 
 /**
- * Fetches real TLE data from CelesTrak across active groups and debris fields.
- * Updates the existing 16,063 orbital elements with live CelesTrak TLEs.
- * Ensures the system operates seamlessly whether connected to CelesTrak or using the local catalog.
+ * Fetches a single CelesTrak URL with timeout and 1 retry
  */
-export async function fetchLiveTleData(): Promise<{ records: TleRecord[]; source: string; isFallback: boolean }> {
-  // 1. Base persistent catalog
-  const baseMasterRecords = loadSampleTleDataset();
-  if (baseMasterRecords.length === 0) {
-    console.error('[TLE Fetcher] No base master records found in catalog_16063.tle');
-    return { records: [], source: 'Error', isFallback: true };
-  }
-
-  let fetchedText = '';
-  let successfulFetch = false;
-
-  // 2. Fetch concurrently from CelesTrak endpoints with timeout
-  const fetchPromises = CELESTRAK_URLS.map(async (url) => {
+async function fetchWithRetry(url: string, timeoutMs: number = 12000, maxRetries: number = 1): Promise<string> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4500);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       const resp = await fetch(url, {
         signal: controller.signal,
         headers: {
@@ -98,97 +133,116 @@ export async function fetchLiveTleData(): Promise<{ records: TleRecord[]; source
         }
       }
     } catch {
-      // Endpoint unreachable or timeout
+      // Retry once on failure
     }
-    return '';
-  });
+  }
+  return '';
+}
 
+export interface FetchLiveTleResult {
+  records: TleRecord[];
+  snapshot: SnapshotMetadata | null;
+  source: string;
+  isFallback: boolean;
+  metrics?: {
+    totalFetched: number;
+    leoRecords: number;
+    nonLeoRecords: number;
+    invalidChecksums: number;
+  };
+}
+
+/**
+ * Fetches real LEO TLE data from CelesTrak, parses and strictly filters to LEO,
+ * atomically stores into a new SQLite snapshot, and prunes older historical snapshots.
+ * Seamlessly falls back to the most recent valid active snapshot on network degradation.
+ */
+export async function fetchLiveTleData(): Promise<FetchLiveTleResult> {
+  const fetchPromises = CELESTRAK_LEO_URLS.map((url) => fetchWithRetry(url, 12000, 1));
   const results = await Promise.allSettled(fetchPromises);
-  results.forEach((res) => {
+
+  let fetchedText = '';
+  let successfulEndpoints = 0;
+
+  for (const res of results) {
     if (res.status === 'fulfilled' && res.value) {
       fetchedText += '\n' + res.value;
-      successfulFetch = true;
+      successfulEndpoints++;
     }
-  });
+  }
 
-  if (successfulFetch && fetchedText.length > 100) {
-    const liveParsed = parseTleRawText(fetchedText, 'CELESTRAK');
-    console.log(`[TLE Fetcher] Received ${liveParsed.length} live records from CelesTrak.`);
+  // Check if CelesTrak responded with sufficient text
+  if (successfulEndpoints > 0 && fetchedText.length > 200) {
+    const { records, metrics } = parseTleWithMetrics(fetchedText, 'CELESTRAK', true);
 
-    // Fast lookup map of live CelesTrak records by NORAD ID and normalized name
-    const liveByNorad = new Map<number, TleRecord>();
-    const liveByName = new Map<string, TleRecord>();
+    if (records.length >= MINIMUM_LEO_OBJECTS_THRESHOLD) {
+      const snapId = `snap_celestrak_${Date.now()}`;
+      const nowIso = new Date().toISOString();
+      const dataHash = crypto.createHash('sha256').update(fetchedText).digest('hex').slice(0, 16);
 
-    for (const liveItem of liveParsed) {
-      if (liveItem.noradId) {
-        liveByNorad.set(liveItem.noradId, liveItem);
-      }
-      const cleanName = liveItem.name.replace(/[\s\-_]+/g, ' ').trim().toUpperCase();
-      liveByName.set(cleanName, liveItem);
-    }
+      const metadata: SnapshotMetadata = {
+        id: snapId,
+        source: 'CELESTRAK',
+        fetchedAt: nowIso,
+        processedAt: nowIso,
+        objectCount: records.length,
+        totalFetched: metrics.validRecords + metrics.nonLeoRecords,
+        invalidCount: metrics.invalidChecksums,
+        nonLeoCount: metrics.nonLeoRecords,
+        dataHash,
+        isActive: true,
+        status: 'ACTIVE'
+      };
 
-    let matchedCount = 0;
-    // Update our 16,063 objects in-place with fresh live orbital parameters
-    const updatedRecords: TleRecord[] = baseMasterRecords.map((baseRec) => {
-      let liveMatch: TleRecord | undefined;
+      console.log(
+        `[TLE Fetcher] Successfully fetched ${records.length} LEO records from CelesTrak ` +
+        `(${metrics.nonLeoRecords} non-LEO excluded, ${metrics.invalidChecksums} invalid checksums).`
+      );
 
-      if (baseRec.noradId && liveByNorad.has(baseRec.noradId)) {
-        liveMatch = liveByNorad.get(baseRec.noradId);
-      } else {
-        const cleanBaseName = baseRec.name.replace(/[\s\-_]+/g, ' ').trim().toUpperCase();
-        if (liveByName.has(cleanBaseName)) {
-          liveMatch = liveByName.get(cleanBaseName);
+      await saveNewSnapshot(metadata, records);
+      await setMetadata('active_source', 'CelesTrak (Live LEO Ingestion)');
+
+      return {
+        records,
+        snapshot: metadata,
+        source: 'CelesTrak (Live LEO Ingestion)',
+        isFallback: false,
+        metrics: {
+          totalFetched: metadata.totalFetched,
+          leoRecords: records.length,
+          nonLeoRecords: metrics.nonLeoRecords,
+          invalidChecksums: metrics.invalidChecksums
         }
-      }
+      };
+    } else {
+      console.warn(`[TLE Fetcher] CelesTrak returned only ${records.length} LEO objects (below ${MINIMUM_LEO_OBJECTS_THRESHOLD} threshold). Triggering fallback snapshot.`);
+    }
+  } else {
+    console.warn('[TLE Fetcher] CelesTrak unreachable or timed out. Triggering fallback snapshot.');
+  }
 
-      if (liveMatch) {
-        matchedCount++;
-        return {
-          ...baseRec,
-          line1: liveMatch.line1,
-          line2: liveMatch.line2,
-          epochYear: liveMatch.epochYear,
-          epochDay: liveMatch.epochDay,
-          inclinationDeg: liveMatch.inclinationDeg,
-          raanDeg: liveMatch.raanDeg,
-          eccentricity: liveMatch.eccentricity,
-          argPerigeeDeg: liveMatch.argPerigeeDeg,
-          meanAnomalyDeg: liveMatch.meanAnomalyDeg,
-          meanMotionRevDay: liveMatch.meanMotionRevDay,
-          periodMin: liveMatch.periodMin,
-          perigeeKm: liveMatch.perigeeKm,
-          apogeeKm: liveMatch.apogeeKm,
-          source: 'CELESTRAK' as const,
-          updatedAt: new Date().toISOString()
-        };
-      }
-
-      return baseRec;
-    });
-
-    console.log(`[TLE Fetcher] Synchronized ${matchedCount}/${updatedRecords.length} objects with live CelesTrak elements.`);
-
-    await saveTleRecords(updatedRecords);
-    await setMetadata('active_source', 'CelesTrak (Live Satellite & Debris Catalog)');
-
+  // Fallback Phase: Load latest active snapshot from SQLite
+  const active = await loadActiveSnapshot();
+  if (active.records.length > 0 && active.metadata) {
+    console.log(`[TLE Fetcher] Using active fallback snapshot (${active.records.length} objects, snapshot ID: ${active.metadata.id}).`);
     return {
-      records: updatedRecords,
-      source: 'CelesTrak (Live Satellite & Debris Catalog)',
-      isFallback: false
+      records: active.records,
+      snapshot: active.metadata,
+      source: `${active.metadata.source} (Snapshot Cache)`,
+      isFallback: true
     };
   }
 
-  // Fallback: Use stored records if available or base master records
-  const cached = await loadAllTles();
-  if (cached.length >= 1000) {
-    console.log(`[TLE Fetcher] CelesTrak offline/unreachable: maintaining ${cached.length} stored catalog records.`);
-    return { records: cached, source: 'Catalog Telemetry (Live Astrodynamics Propagation)', isFallback: true };
-  }
-
-  await saveTleRecords(baseMasterRecords);
-  await setMetadata('active_source', 'Catalog Telemetry (Live Astrodynamics Propagation)');
-  return { records: baseMasterRecords, source: 'Catalog Telemetry (Live Astrodynamics Propagation)', isFallback: true };
+  // Cold Bootstrap Fallback
+  const boot = await bootstrapInitialSnapshot();
+  return {
+    records: boot.records,
+    snapshot: boot.snapshot,
+    source: 'Local LEO Baseline Snapshot',
+    isFallback: true
+  };
 }
+
 
 
 

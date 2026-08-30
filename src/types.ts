@@ -1,15 +1,59 @@
 export type ObjectClassification = 'ACTIVE_SATELLITE' | 'ROCKET_BODY' | 'DEBRIS' | 'SPECIAL';
 
+export type OrbitClass = 'LEO' | 'MEO' | 'GEO' | 'HEO' | 'OTHER';
+
 export type RiskLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+
+export type FreshnessState = 'LIVE' | 'FRESH_SNAPSHOT' | 'STALE_SNAPSHOT' | 'CRITICAL_STALE' | 'NO_DATA';
+
+export type SeverityLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'EXTREME';
+
+export type UrgencyLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export type LeoBand = 'VERY_LOW_LEO' | 'CORE_CONSTELLATION_LEO' | 'MID_LEO' | 'UPPER_LEO';
+
+export interface SnapshotMetadata {
+  id: string;
+  source: 'CELESTRAK' | 'LOCAL_SNAPSHOT' | 'DEMO_SCENARIO';
+  fetchedAt: string;
+  processedAt: string;
+  objectCount?: number;
+  validLeoCount?: number;
+  totalFetched: number;
+  invalidCount: number;
+  nonLeoCount: number;
+  dataHash?: string;
+  contentHash?: string;
+  isActive?: boolean;
+  status: 'ACTIVE' | 'SUPERSEDED' | 'FAILED';
+}
+
+export interface DataStatusResponse {
+  mode: string;
+  source: string;
+  fetchedAt: string;
+  processedAt: string;
+  ageSeconds: number;
+  freshnessState: FreshnessState;
+  objectCount: number;
+  totalFetched: number;
+  invalidCount: number;
+  nonLeoCount: number;
+  activeSnapshotId: string;
+  isFallback: boolean;
+  retentionCount?: number;
+}
 
 export interface TleRecord {
   id: string; // NORAD ID or unique key
   noradId?: number;
+  snapshotId?: string;
   name: string;
   line1: string;
   line2: string;
   classification: ObjectClassification;
-  source: 'CELESTRAK' | 'SAMPLE_DATASET' | 'DEMO_CONJUNCTION';
+  orbitClass?: OrbitClass;
+  source: 'CELESTRAK' | 'SAMPLE_DATASET' | 'DEMO_CONJUNCTION' | 'LOCAL_SNAPSHOT';
   epochYear: number;
   epochDay: number;
   inclinationDeg: number;
@@ -46,6 +90,7 @@ export interface TrackedObjectSummary {
   id: string;
   name: string;
   classification: ObjectClassification;
+  orbitClass?: OrbitClass;
   source: string;
   noradId: string;
   inclinationDeg: number;
@@ -65,16 +110,29 @@ export interface TrackedObjectSummary {
 
 export interface RiskScoreBreakdown {
   rawDistanceKm: number;
-  distanceScore: number; // 0-100
-  distanceWeight: number; // e.g. 0.60
+  distanceScore: number; // 0-100 (45% weight)
+  distanceWeight: number; // 0.45
   
   relativeVelocityKmS: number;
-  velocityScore: number; // 0-100
-  velocityWeight: number; // e.g. 0.25
+  severityScore: number; // 0-100 (25% weight)
+  severityWeight: number; // 0.25
+  severityLevel: SeverityLevel;
   
   timeToEventHours: number;
-  timeScore: number; // 0-100
-  timeWeight: number; // e.g. 0.15
+  urgencyScore: number; // 0-100 (20% weight)
+  urgencyWeight: number; // 0.20
+  urgencyLevel: UrgencyLevel;
+  
+  leoContextScore: number; // 0-100 (10% weight)
+  leoContextWeight: number; // 0.10
+  leoBand: LeoBand;
+  tcaAltitudeKm: number;
+  
+  // Backwards compatibility aliases
+  velocityScore?: number;
+  velocityWeight?: number;
+  timeScore?: number;
+  timeWeight?: number;
   
   finalRiskScore: number; // 0-100
   riskLevel: RiskLevel;
@@ -154,6 +212,7 @@ export interface SystemConfig {
     distance: number;
     velocity: number;
     time: number;
+    leoContext?: number;
   };
   riskThresholds: {
     critical: number;
@@ -177,12 +236,15 @@ export interface SystemStatus {
   lastSyncTimestamp?: number;
   isLiveCelesTrak?: boolean;
   wsConnectedClients?: number;
+  snapshotMetadata?: SnapshotMetadata;
+  freshnessState?: FreshnessState;
 }
 
 export interface LiveTelemetryObject {
   id: string;
   name: string;
   classification: ObjectClassification;
+  orbitClass?: OrbitClass;
   noradId: string;
   pos: Vector3D;
   vel: Vector3D;
@@ -222,5 +284,7 @@ export type WsServerPacket =
   | WsConjunctionUpdatePacket
   | { type: 'pong'; timestamp: number }
   | { type: 'sync_complete'; status: SystemStatus; objects: TrackedObjectSummary[]; conjunctions: ConjunctionEvent[] }
+  | { type: 'dataset_updated'; status: SystemStatus; snapshot: SnapshotMetadata }
   | { type: 'error'; message: string };
+
 

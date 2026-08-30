@@ -78,6 +78,50 @@ export const Header: React.FC<HeaderProps> = ({
   const rbCount = status?.rocketBodiesCount ?? Math.min(status?.trackedObjectsCount || 0, 8);
   const conjCount = status?.detectedConjunctionsCount ?? 0;
 
+  const freshnessState = status?.freshnessState || (isLive ? 'LIVE' : 'FRESH_SNAPSHOT');
+  
+  const getFreshnessBadge = () => {
+    const ageMin = status?.snapshotMetadata?.fetchedAt
+      ? Math.max(0, Math.floor((Date.now() - new Date(status.snapshotMetadata.fetchedAt).getTime()) / (60 * 1000)))
+      : 0;
+
+    switch (freshnessState) {
+      case 'LIVE':
+        return {
+          label: 'LIVE (CelesTrak LEO)',
+          classes: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.25)]',
+          dot: 'bg-emerald-400 animate-pulse'
+        };
+      case 'FRESH_SNAPSHOT':
+        return {
+          label: `SNAPSHOT (${ageMin}m ago)`,
+          classes: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30 shadow-[0_0_10px_rgba(6,182,212,0.2)]',
+          dot: 'bg-cyan-400'
+        };
+      case 'STALE_SNAPSHOT':
+        return {
+          label: `STALE SNAPSHOT (${ageMin}m ago)`,
+          classes: 'bg-amber-500/15 text-amber-300 border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.2)]',
+          dot: 'bg-amber-400 animate-pulse'
+        };
+      case 'CRITICAL_STALE':
+        return {
+          label: `CRITICAL STALE (${Math.floor(ageMin / 60)}h ago)`,
+          classes: 'bg-rose-500/15 text-rose-300 border-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.2)]',
+          dot: 'bg-rose-400 animate-ping'
+        };
+      case 'NO_DATA':
+      default:
+        return {
+          label: 'NO DATA',
+          classes: 'bg-slate-800 text-slate-400 border-slate-700',
+          dot: 'bg-slate-500'
+        };
+    }
+  };
+
+  const badge = getFreshnessBadge();
+
   return (
     <header id="dashboard-header" className="bg-slate-900/95 border-b border-white/10 text-slate-100 px-3 sm:px-6 py-2 sm:py-3.5 sticky top-0 z-30 backdrop-blur-2xl">
       <div className="max-w-7xl mx-auto flex flex-col gap-2.5 sm:gap-3">
@@ -88,33 +132,28 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <span className="text-[9px] sm:text-[10px] tracking-[0.2em] sm:tracking-[0.25em] text-cyan-400 font-bold uppercase flex items-center gap-1 font-mono">
                 <Radio className="w-3 h-3 text-cyan-400 animate-pulse" />
-                <span className="hidden sm:inline">Continuous</span> Astrodynamics Stream
+                <span className="hidden sm:inline">LEO SSA</span> Astrodynamics Stream
+              </span>
+
+              {/* Data Freshness Status Badge */}
+              <span className={`text-[9px] sm:text-[10px] uppercase font-mono px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${badge.classes}`} title={`Orbital Dataset State: ${freshnessState}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                <span>{badge.label}</span>
               </span>
 
               {/* Real-time Telemetry Stream Status Badge */}
               <span className={`text-[9px] sm:text-[10px] uppercase font-mono px-2 py-0.5 rounded-full border flex items-center gap-1.5 ${
                 isWsConnected
-                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.2)]'
-                  : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                  : 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
               }`} title={isWsConnected ? 'WebSocket continuously streaming live telemetry packets' : 'Continuous real-time astrodynamics stream active'}>
                 <span className={`w-1.5 h-1.5 rounded-full ${isWsConnected ? 'bg-emerald-400 animate-ping' : 'bg-cyan-400 animate-pulse'}`} />
                 <span>{isWsConnected ? `WS ${wsLatency !== null ? `(${wsLatency}ms)` : 'LIVE'}` : 'STREAMING'}</span>
               </span>
-
-              <span className={`hidden sm:flex text-[9px] sm:text-[10px] uppercase font-mono px-2 py-0.5 rounded-full border items-center gap-1.5 ${
-                isLive
-                  ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30 shadow-[0_0_10px_rgba(6,182,212,0.2)]'
-                  : isDemo
-                  ? 'bg-purple-500/15 text-purple-300 border-purple-500/30'
-                  : 'bg-white/5 text-slate-400 border-white/10'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-cyan-400' : 'bg-slate-400'}`} />
-                {status?.activeSource || 'CURATED_FLEET'}
-              </span>
             </div>
 
             <h1 className="text-base sm:text-xl font-light tracking-tight mt-0.5 text-white flex items-center gap-1.5">
-              SPACE DEBRIS <span className="text-cyan-400 font-semibold">& ROCKET BODY TRACKER</span>
+              LEO SPACE DEBRIS <span className="text-cyan-400 font-semibold">& CONJUNCTION TRACKER</span>
             </h1>
           </div>
 
@@ -187,10 +226,10 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Scrollable metrics row on mobile */}
           <div className="flex xl:grid xl:grid-cols-4 gap-2 overflow-x-auto no-scrollbar py-0.5 flex-1 max-w-full xl:max-w-4xl">
             <div id="metric-tracked-objects" className="bg-slate-950/60 border border-white/10 rounded-xl p-2 flex flex-col justify-between shadow-md shrink-0 min-w-[125px] xl:min-w-0">
-              <span className="block text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Tracked Objects</span>
+              <span className="block text-[9px] text-slate-400 uppercase tracking-wider font-semibold">LEO Tracked Objects</span>
               <div className="flex items-baseline justify-between mt-0.5">
                 <span className="text-sm sm:text-base font-mono font-bold leading-none text-white">{status?.trackedObjectsCount ?? 0}</span>
-                <span className="text-[8px] sm:text-[9px] font-mono text-cyan-400 font-bold">Curated Set</span>
+                <span className="text-[8px] sm:text-[9px] font-mono text-cyan-400 font-bold">LEO &le; 2000km</span>
               </div>
             </div>
 
@@ -217,15 +256,16 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             <div id="metric-last-update" className="bg-slate-950/60 border border-white/10 rounded-xl p-2 flex flex-col justify-between shadow-md shrink-0 min-w-[130px] xl:min-w-0">
-              <span className="block text-[9px] text-slate-400 uppercase tracking-wider font-semibold">CelesTrak Sync</span>
+              <span className="block text-[9px] text-slate-400 uppercase tracking-wider font-semibold">LEO Snapshot Age</span>
               <div className="flex items-center gap-1 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
-                <span className="text-[10px] sm:text-[11px] font-mono font-bold text-emerald-400 truncate">
-                  {formatTime(status?.lastDataUpdate)}
+                <span className={`w-1.5 h-1.5 rounded-full ${badge.dot} shrink-0`}></span>
+                <span className="text-[10px] sm:text-[11px] font-mono font-bold text-cyan-300 truncate">
+                  {formatTime(status?.snapshotMetadata?.fetchedAt || status?.lastDataUpdate)}
                 </span>
               </div>
             </div>
           </div>
+
 
           {/* Action Controls in a neat scrollable row on mobile */}
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0 py-0.5">

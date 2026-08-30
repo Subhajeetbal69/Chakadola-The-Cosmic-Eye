@@ -302,6 +302,7 @@ export function getObjectSummary(
     id: r.id,
     name: r.name,
     classification: r.classification,
+    orbitClass: r.orbitClass || 'LEO',
     source: r.source,
     noradId: r.id,
     inclinationDeg: r.inclinationDeg,
