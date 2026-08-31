@@ -4,7 +4,7 @@ import { EarthScene, ZoomAction } from '../components/earth/EarthScene';
 import { Orbit2DView } from '../components/Orbit2DView';
 import { TrackedObjectsCatalog } from '../components/TrackedObjectsCatalog';
 import { useTelemetry } from '../context/TelemetryContext';
-import { Play, Pause, FastForward, RotateCcw, AlertTriangle, ChevronRight, Share2, Globe, Orbit, MousePointer2, Move, Clock, Info, Rocket, Orbit as OrbitIcon, Navigation, RotateCw, ZoomIn, Lock, Focus, Map as MapIcon, Compass, ShieldAlert, Zap, Layers, RefreshCw, ZoomOut, Gauge, X, Radio } from 'lucide-react';
+import { Play, Pause, FastForward, RotateCcw, AlertTriangle, ChevronRight, Share2, Globe, Orbit, MousePointer2, Move, Clock, Info, Rocket, Orbit as OrbitIcon, Navigation, RotateCw, ZoomIn, Lock, Focus, Map as MapIcon, Compass, ShieldAlert, Zap, Layers, RefreshCw, ZoomOut, Gauge, X, Radio, Maximize2 } from 'lucide-react';
 import { NavPill } from '../components/NavPill';
 import './EarthPage.css';
 

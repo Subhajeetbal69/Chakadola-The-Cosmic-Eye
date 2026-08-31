@@ -1,18 +1,6 @@
 import React, { useState } from 'react';
-import {
-  Crosshair,
-  Gauge,
-  ShieldAlert,
-  Radio,
-  Copy,
-  Check,
-  Flame,
-  Globe2,
-  Orbit,
-  Trash2,
-  Rocket
-} from 'lucide-react';
 import { TrackedObjectSummary, ConjunctionEvent } from '../types';
+import './SatelliteDossier.css';
 
 interface SatelliteDossierInlineProps {
   object: TrackedObjectSummary;
@@ -67,249 +55,296 @@ export const SatelliteDossierInline: React.FC<SatelliteDossierInlineProps> = Rea
   };
 
   return (
-    <div className="bg-[#0b1720]/80 border border-white/12 rounded-[28px] overflow-hidden flex flex-col w-full text-slate-100 shadow-xl backdrop-blur-md">
-      {/* Header */}
-      <div className="px-5 py-4 border-b border-white/10 bg-black/20 flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div
-            className={`w-11 h-11 rounded-xl flex items-center justify-center border shrink-0 ${
-              isDebris
-                ? 'bg-slate-800 border-slate-600 text-slate-200'
-                : isRocketBody
-                ? 'bg-amber-950/60 border-amber-500/40 text-amber-400'
-                : 'bg-cyan-950/60 border-cyan-500/40 text-cyan-400'
-            }`}
-          >
-            {isDebris ? <Trash2 className="w-5 h-5" /> : isRocketBody ? <Rocket className="w-5 h-5" /> : <Radio className="w-5 h-5" />}
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase ${
-                  isDebris ? 'bg-slate-800 text-slate-300 border-slate-700'
-                  : isRocketBody ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                  : 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
-              }`}>
-                {object.classification.replace('_', ' ')}
-              </span>
-              <span className="text-xs font-mono text-slate-400 font-semibold">NORAD #{object.noradId}</span>
-              {activeHazard && (
-                <span className="bg-[#f18b78] text-[#172116] text-[10px] font-mono font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                  <ShieldAlert className="w-3 h-3" />
-                  CONJUNCTION HAZARD
-                </span>
-              )}
-            </div>
-            <h3 className="text-lg sm:text-xl font-bold tracking-wide mt-1 font-[Georgia,serif] truncate text-[#f2f3ee]">
-              {object.name}
-            </h3>
-          </div>
+    <div className="dossier-wrapper w-full" role="region" aria-label="Object dossier" style={{ maxWidth: '100%' }}>
+      {/* ── Header ── */}
+      <header className="dossier-head">
+        <div className={`dossier-sigil ${isDebris ? 'debris' : isRocketBody ? 'rocket_body' : ''}`} aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/>
+            <path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4"/>
+            <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/>
+          </svg>
         </div>
-      </div>
+        <div className="dossier-head-main">
+          <div className="dossier-tag-row">
+            <span className={`dossier-chip status ${isDebris ? 'debris' : isRocketBody ? 'rocket_body' : ''}`}>
+              {object.classification.replace('_', ' ')}
+            </span>
+            <span className="dossier-chip norad">NORAD #{object.noradId}</span>
+            {activeHazard && (
+              <span className="dossier-chip hazard">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 5 6v5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6l-7-3Z"/><path d="M12 8v4M12 15.5v.5"/></svg>
+                Conjunction Hazard
+              </span>
+            )}
+          </div>
+          <h1 className="dossier-title">{object.name}</h1>
+        </div>
+      </header>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 px-5 py-2.5 bg-black/10 border-b border-white/10 overflow-x-auto text-xs font-medium">
-        {[
-          { id: 'OVERVIEW', label: 'Overview & Dynamics', Icon: Gauge },
-          { id: 'EPHEMERIS', label: 'Keplerian Ephemeris', Icon: Orbit },
-          { id: 'HAZARDS', label: 'Safety & Hazards', Icon: ShieldAlert },
-          { id: 'BURN_SIM', label: 'Evasive Burn Planner', Icon: Flame }
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap transition-all ${
-              activeTab === tab.id
-                ? 'bg-[#cbd98a] text-[#172116] font-bold shadow'
-                : 'text-[#9ca89f] hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <tab.Icon className={`w-3.5 h-3.5 ${activeTab === tab.id ? '' : tab.id === 'BURN_SIM' ? 'text-amber-400' : ''}`} />
-            <span>{tab.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* ── Tabs ── */}
+      <nav className="dossier-tabs" role="tablist">
+        <button
+          className={`dossier-tab ${activeTab === 'OVERVIEW' ? 'active' : ''}`}
+          data-accent="lime"
+          role="tab"
+          aria-selected={activeTab === 'OVERVIEW'}
+          onClick={() => setActiveTab('OVERVIEW')}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 1 18 0"/><path d="M12 12l4-2.5"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>
+          Overview &amp; Dynamics
+        </button>
+        <button
+          className={`dossier-tab ${activeTab === 'EPHEMERIS' ? 'active' : ''}`}
+          data-accent="lime"
+          role="tab"
+          aria-selected={activeTab === 'EPHEMERIS'}
+          onClick={() => setActiveTab('EPHEMERIS')}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="12" rx="9" ry="4.2"/><ellipse cx="12" cy="12" rx="4.2" ry="9" transform="rotate(60 12 12)"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>
+          Keplerian Ephemeris
+        </button>
+        <button
+          className={`dossier-tab ${activeTab === 'HAZARDS' ? 'active' : ''}`}
+          data-accent="lime"
+          role="tab"
+          aria-selected={activeTab === 'HAZARDS'}
+          onClick={() => setActiveTab('HAZARDS')}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 5 6v5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6l-7-3Z"/><path d="M12 8v4M12 15.5v.5"/></svg>
+          Safety &amp; Hazards
+        </button>
+        <button
+          className={`dossier-tab ${activeTab === 'BURN_SIM' ? 'active' : ''}`}
+          data-accent="orange"
+          role="tab"
+          aria-selected={activeTab === 'BURN_SIM'}
+          onClick={() => setActiveTab('BURN_SIM')}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3c1.5 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.4.5-2.4 1.2-3.3.4 1 1 1.6 1.8 1.9-.3-2.3.5-4.9 1-6.6Z"/></svg>
+          Evasive Burn Planner
+        </button>
+      </nav>
 
-      {/* Content */}
-      <div className="p-5 overflow-y-auto space-y-4 text-slate-200">
+      {/* ── Body ── */}
+      <div className="dossier-body">
+        {/* Panel 1 — Overview & Dynamics */}
         {activeTab === 'OVERVIEW' && (
-          <div className="space-y-4">
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <div className="flex items-center gap-2">
-                  <Gauge className="w-4 h-4 text-cyan-400" />
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">Orbital Kinematics & Energy</h4>
-                </div>
-                <span className="text-[10px] font-mono text-cyan-400 font-bold bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">HYPERVELOCITY</span>
+          <div className="dossier-panel active" role="tabpanel">
+            <div className="dossier-card-lime" style={{ padding: '18px 20px' }}>
+              <div className="dossier-sec-head">
+                <span className="dossier-sec-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="var(--lime)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 12l4-6"/><path d="M3.5 15a9 9 0 0 1 17 0"/><circle cx="12" cy="12" r="1.4" fill="var(--lime)" stroke="none"/></svg>
+                  Orbital Kinematics &amp; Energy
+                </span>
+                <span className="dossier-pill lime">Hypervelocity</span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
-                <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                  <div className="text-[10px] text-slate-400 uppercase font-mono">Velocity</div>
-                  <div className="text-lg font-black text-cyan-300 font-mono mt-0.5">{speedKmS.toFixed(2)} <span className="text-xs font-normal text-slate-400">km/s</span></div>
+              <div className="dossier-stat-grid">
+                <div className="dossier-stat">
+                  <div className="k">Velocity</div>
+                  <div><span className="dossier-v lime">{speedKmS.toFixed(2)}</span><span className="u">km/s</span></div>
                 </div>
-                <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                  <div className="text-[10px] text-slate-400 uppercase font-mono">Mach Equiv.</div>
-                  <div className="text-lg font-black text-amber-300 font-mono mt-0.5">Mach {speedMach.toFixed(1)}</div>
+                <div className="dossier-stat">
+                  <div className="k">Mach Equiv.</div>
+                  <div><span className="dossier-v amber">Mach&nbsp;{speedMach.toFixed(1)}</span></div>
                 </div>
-                <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                  <div className="text-[10px] text-slate-400 uppercase font-mono">Ground Speed</div>
-                  <div className="text-sm font-bold text-slate-200 font-mono mt-1">{speedKmH.toLocaleString(undefined, { maximumFractionDigits: 0 })} <span className="text-[10px] text-slate-400">km/h</span></div>
+                <div className="dossier-stat">
+                  <div className="k">Ground Speed</div>
+                  <div><span className="dossier-v white">{speedKmH.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span><span className="u">km/h</span></div>
                 </div>
-                <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                  <div className="text-[10px] text-slate-400 uppercase font-mono">Kinetic Energy</div>
-                  <div className="text-sm font-bold text-[#f18b78] font-mono mt-1">{kineticEnergyMJ.toFixed(1)} <span className="text-[10px] text-slate-400">MJ</span></div>
+                <div className="dossier-stat">
+                  <div className="k">Kinetic Energy</div>
+                  <div><span className="dossier-v red">{kineticEnergyMJ.toFixed(1)}</span><span className="u">MJ</span></div>
                 </div>
+              </div>
+              <div className="dossier-impact">
+                <span className="lbl">Impact Energy Equivalence:</span>
+                <span className="val">~{tntEquivalentKg.toFixed(1)} kg TNT detonation</span>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <Globe2 className="w-4 h-4 text-emerald-400" />
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">Geographic Sub-Point</h4>
+
+            <div className="dossier-duo">
+              <div className="dossier-card" style={{ padding: '15px 17px' }}>
+                <div className="dossier-sec-title" style={{ marginBottom: '13px', color: 'var(--green)' }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3c-2.5 3.5-2.5 14.5 0 18M12 3c2.5 3.5 2.5 14.5 0 18"/></svg>
+                  Geographic Sub-Point
                 </div>
-                <div className="flex justify-between text-xs py-1 border-b border-white/10">
-                  <span className="text-slate-400">Latitude:</span>
-                  <span className="font-mono text-emerald-300 font-bold">{(object.lat ?? 0).toFixed(2)}&deg;</span>
-                </div>
-                <div className="flex justify-between text-xs py-1">
-                  <span className="text-slate-400">Longitude:</span>
-                  <span className="font-mono text-emerald-300 font-bold">{(object.lng ?? 0).toFixed(2)}&deg;</span>
-                </div>
+                <div className="dossier-kv"><span className="lbl">Latitude:</span><span className="dossier-v green" style={{ fontSize: '14px' }}>{(object.lat ?? 0).toFixed(2)}&deg; {((object.lat ?? 0) >= 0 ? 'N' : 'S')}</span></div>
+                <div className="dossier-kv"><span className="lbl">Longitude:</span><span className="dossier-v green" style={{ fontSize: '14px' }}>{(object.lng ?? 0).toFixed(2)}&deg; {((object.lng ?? 0) >= 0 ? 'E' : 'W')}</span></div>
               </div>
-              <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <Orbit className="w-4 h-4 text-blue-400" />
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">Altitude & Period</h4>
+              <div className="dossier-card" style={{ padding: '15px 17px' }}>
+                <div className="dossier-sec-title" style={{ marginBottom: '13px', color: 'var(--lime)' }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="var(--lime)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(30 12 12)"/></svg>
+                  Altitude &amp; Period
                 </div>
-                <div className="flex justify-between text-xs py-1 border-b border-white/10">
-                  <span className="text-slate-400">Altitude:</span>
-                  <span className="font-mono text-blue-400 font-bold">{(object.altitudeKm ?? 0).toFixed(1)} km</span>
-                </div>
-                <div className="flex justify-between text-xs py-1">
-                  <span className="text-slate-400">Period:</span>
-                  <span className="font-mono text-slate-200 font-bold">{(object.periodMin ?? 0).toFixed(1)} min</span>
-                </div>
+                <div className="dossier-kv"><span className="lbl">Altitude:</span><span className="dossier-v lime" style={{ fontSize: '14px' }}>{(object.altitudeKm ?? 0).toFixed(1)} km</span></div>
+                <div className="dossier-kv"><span className="lbl">Period:</span><span className="dossier-v white" style={{ fontSize: '14px' }}>{(object.periodMin ?? 0).toFixed(1)} min</span></div>
               </div>
             </div>
           </div>
         )}
 
+        {/* Panel 2 — Keplerian Ephemeris */}
         {activeTab === 'EPHEMERIS' && (
-          <div className="space-y-4">
-            <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-2.5">
-              <div className="flex items-center gap-2 mb-2">
-                <Orbit className="w-4 h-4 text-blue-400" />
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">6-Parameter Keplerian State Vector</h4>
+          <div className="dossier-panel active" role="tabpanel">
+            <div className="dossier-card-lime" style={{ padding: '18px 20px' }}>
+              <div className="dossier-sec-head">
+                <span className="dossier-sec-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="var(--lime)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="12" rx="9" ry="4.2"/><ellipse cx="12" cy="12" rx="4.2" ry="9" transform="rotate(60 12 12)"/><circle cx="12" cy="12" r="1.4" fill="var(--lime)" stroke="none"/></svg>
+                  6-Parameter Keplerian State Vector
+                </span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                  <span className="text-slate-400 text-[10px] uppercase font-mono">Semi-Major Axis (a)</span>
-                  <div className="text-sm font-bold text-white font-mono mt-0.5">{semiMajorKm.toFixed(1)} km</div>
+              <div className="dossier-kep-grid">
+                <div className="dossier-kep">
+                  <div className="k">Semi-Major Axis (a)</div>
+                  <div className="dossier-v white">{semiMajorKm.toFixed(1)} km</div>
                 </div>
-                <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                  <span className="text-slate-400 text-[10px] uppercase font-mono">Inclination (i)</span>
-                  <div className="text-sm font-bold text-white font-mono mt-0.5">{(object.inclinationDeg ?? 0).toFixed(2)}&deg;</div>
+                <div className="dossier-kep">
+                  <div className="k">Inclination (i)</div>
+                  <div className="dossier-v white">{(object.inclinationDeg ?? 0).toFixed(2)}&deg;</div>
                 </div>
-                <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                  <span className="text-slate-400 text-[10px] uppercase font-mono">Perigee (Lowest Point)</span>
-                  <div className="text-sm font-bold text-cyan-300 font-mono mt-0.5">{(object.perigeeKm ?? 0).toFixed(1)} km</div>
+                <div className="dossier-kep">
+                  <div className="k">Perigee (Lowest Point)</div>
+                  <div className="dossier-v lime">{(object.perigeeKm ?? 0).toFixed(1)} km</div>
                 </div>
-                <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                  <span className="text-slate-400 text-[10px] uppercase font-mono">Apogee (Highest Point)</span>
-                  <div className="text-sm font-bold text-cyan-300 font-mono mt-0.5">{(object.apogeeKm ?? 0).toFixed(1)} km</div>
+                <div className="dossier-kep">
+                  <div className="k">Apogee (Highest Point)</div>
+                  <div className="dossier-v lime">{(object.apogeeKm ?? 0).toFixed(1)} km</div>
                 </div>
               </div>
-              <div className="pt-2 border-t border-white/10 space-y-2 text-xs">
-                <div className="flex justify-between py-1 border-b border-white/5">
-                  <span className="text-slate-400">ECI Coordinates:</span>
-                  <span className="font-mono text-slate-300">
-                    X: {object.currentPosition?.x?.toFixed(1) ?? 'N/A'}, Y: {object.currentPosition?.y?.toFixed(1) ?? 'N/A'}, Z: {object.currentPosition?.z?.toFixed(1) ?? 'N/A'}
-                  </span>
-                </div>
+              <div className="dossier-foot-line">
+                <span className="lbl">Orbital Period:</span>
+                <span className="dossier-v white" style={{ fontSize: '13.5px' }}>
+                  {(object.periodMin ?? 0).toFixed(1)} minutes ({(1440 / Math.max(1, object.periodMin ?? 90)).toFixed(2)} rev/day)
+                </span>
+              </div>
+              <div className="dossier-foot-line" style={{ borderTop: 'none', paddingTop: '4px' }}>
+                <span className="lbl">ECI Coordinates:</span>
+                <span className="dossier-v white" style={{ fontSize: '13.5px' }}>
+                  X: {object.currentPosition?.x?.toFixed(1) ?? 'N/A'}, Y: {object.currentPosition?.y?.toFixed(1) ?? 'N/A'}, Z: {object.currentPosition?.z?.toFixed(1) ?? 'N/A'} km
+                </span>
               </div>
             </div>
           </div>
         )}
 
+        {/* Panel 3 — Safety & Hazards */}
         {activeTab === 'HAZARDS' && (
-          <div className="space-y-4">
+          <div className="dossier-panel active" role="tabpanel">
             {activeHazard ? (
-              <div className="p-4 bg-[#f18b78]/10 border border-[#f18b78]/40 rounded-2xl space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <ShieldAlert className="w-5 h-5 text-[#f18b78]" />
-                    <h4 className="font-bold text-[#f18b78] text-sm">Conjunction Encounter Detected</h4>
-                  </div>
-                  <span className="px-2.5 py-0.5 bg-[#f18b78] text-[#172116] text-xs font-bold rounded">{activeHazard.riskLevel} RISK</span>
+              <div className="dossier-hazard-card">
+                <div className="dossier-sec-head" style={{ marginBottom: 0 }}>
+                  <span className="dossier-sec-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3 5 6v5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6l-7-3Z"/><path d="M12 8v4M12 15.5v.5"/></svg>
+                    Conjunction Encounter Detected
+                  </span>
+                  <span className="dossier-pill crit">{activeHazard.riskLevel} Risk</span>
                 </div>
-                <div className="text-xs text-slate-200 font-mono space-y-1 bg-black/20 p-3 rounded-xl border border-[#f18b78]/20">
-                  <div>Target Intersect: <strong className="text-white">{activeHazard.objectA?.id === object.id ? activeHazard.objectB?.name : activeHazard.objectA?.name}</strong></div>
-                  <div>Minimum Miss Distance: <strong className="text-[#f18b78]">{(activeHazard.minDistanceKm ?? 0).toFixed(2)} km</strong></div>
-                  <div>Relative Encounter Velocity: <strong className="text-[#e8894a]">{(activeHazard.relativeVelocityKmS ?? 0).toFixed(2)} km/s</strong></div>
+                <div className="dossier-terminal">
+                  <div><span className="lbl">Target Intersect:</span> <b>{activeHazard.objectA?.id === object.id ? activeHazard.objectB?.name : activeHazard.objectA?.name}</b></div>
+                  <div><span className="lbl">Minimum Miss Distance:</span> <span className="danger">{(activeHazard.minDistanceKm ?? 0).toFixed(2)} km</span></div>
+                  <div><span className="lbl">Relative Encounter Velocity:</span> <span className="warn">{(activeHazard.relativeVelocityKmS ?? 0).toFixed(2)} km/s</span></div>
+                  <div><span className="lbl">TCA Timestamp:</span> <b>{activeHazard.tcaIso ? new Date(activeHazard.tcaIso).toLocaleString() : 'Within 24h propagation window'}</b></div>
                 </div>
               </div>
             ) : (
-              <div className="p-4 bg-[#cbd98a]/10 border border-[#cbd98a]/30 rounded-2xl flex items-center gap-3 text-xs text-[#cbd98a]">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#cbd98a] shrink-0" />
-                <div><strong className="block text-[#d9e68e]">Nominal Flight Safety Profile</strong>No critical collision hazard detected.</div>
+              <div className="dossier-card" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--lime)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: '24px', height: '24px' }}>
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/>
+                </svg>
+                <div>
+                  <div style={{ color: 'var(--lime)', fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>Nominal Flight Safety Profile</div>
+                  <div style={{ color: 'var(--muted)', fontSize: '13px' }}>No critical collision hazard or conjunction threat detected in the next 24-hour propagation window.</div>
+                </div>
               </div>
             )}
           </div>
         )}
 
+        {/* Panel 4 — Evasive Burn Planner */}
         {activeTab === 'BURN_SIM' && (
-          <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-4">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Flame className="w-4 h-4 text-amber-400" />
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">Maneuver Simulation (&Delta;V Impulse)</h4>
+          <div className="dossier-panel active" role="tabpanel">
+            <div className="dossier-card" style={{ padding: '18px 20px' }}>
+              <div className="dossier-sec-head">
+                <span className="dossier-sec-title">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="var(--orange)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3c1.5 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.4.5-2.4 1.2-3.3.4 1 1 1.6 1.8 1.9-.3-2.3.5-4.9 1-6.6Z"/></svg>
+                  Maneuver Simulation (&Delta;V Impulse)
+                </span>
+                <div className="dossier-seg">
+                  <button
+                    className={burnDirection === 'PROGRADE' ? 'on' : ''}
+                    onClick={() => setBurnDirection('PROGRADE')}
+                  >
+                    Prograde (+Alt)
+                  </button>
+                  <button
+                    className={burnDirection === 'RETROGRADE' ? 'on' : ''}
+                    onClick={() => setBurnDirection('RETROGRADE')}
+                  >
+                    Retrograde (&minus;Alt)
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-1 bg-black/30 p-1 rounded-lg border border-white/10 text-[10px]">
-                <button onClick={() => setBurnDirection('PROGRADE')} className={`px-2 py-0.5 rounded font-bold transition-all ${burnDirection === 'PROGRADE' ? 'bg-[#e8894a] text-black' : 'text-slate-400 hover:text-white'}`}>Prograde (+Alt)</button>
-                <button onClick={() => setBurnDirection('RETROGRADE')} className={`px-2 py-0.5 rounded font-bold transition-all ${burnDirection === 'RETROGRADE' ? 'bg-[#e8894a] text-black' : 'text-slate-400 hover:text-white'}`}>Retrograde (-Alt)</button>
+
+              <div className="dossier-slider-wrap">
+                <div className="dossier-slider-top">
+                  <span className="lbl">Delta-V Impulse:</span>
+                  <span className="amt">{deltaVInput}<small>m/s</small></span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="50"
+                  value={deltaVInput}
+                  onChange={(e) => setDeltaVInput(Number(e.target.value))}
+                  style={{ '--fill': `${(deltaVInput / 50) * 100}%` } as React.CSSProperties}
+                />
               </div>
-            </div>
-            <div>
-              <div className="flex justify-between items-center text-xs text-slate-300 mb-1.5">
-                <span>Delta-V Impulse:</span>
-                <span className="font-mono font-bold text-amber-400">{deltaVInput} m/s</span>
-              </div>
-              <input type="range" min="1" max="50" value={deltaVInput} onChange={(e) => setDeltaVInput(Number(e.target.value))} className="w-full accent-[#e8894a] h-1.5 bg-black/40 rounded-lg cursor-pointer" />
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                <span className="text-slate-400 text-[10px] uppercase font-mono">Induced Altitude Shift</span>
-                <div className="text-sm font-bold text-amber-300 font-mono mt-0.5">{burnDirection === 'PROGRADE' ? '+' : '-'}{altitudeShiftKm.toFixed(1)} km</div>
-              </div>
-              <div className="bg-black/20 p-3 rounded-xl border border-white/5">
-                <span className="text-slate-400 text-[10px] uppercase font-mono">Est. Fuel Expended</span>
-                <div className="text-sm font-bold text-slate-200 font-mono mt-0.5">{estFuelConsumptionKg.toFixed(2)} kg</div>
+
+              <div className="dossier-duo" style={{ marginTop: '20px' }}>
+                <div className="dossier-stat"><div className="k">Induced Altitude Shift</div><div><span className="dossier-v orange">{burnDirection === 'PROGRADE' ? '+' : '-'}{altitudeShiftKm.toFixed(1)}</span><span className="u">km</span></div></div>
+                <div className="dossier-stat"><div className="k">Est. Fuel Expended</div><div><span className="dossier-v white">{estFuelConsumptionKg.toFixed(2)}</span><span className="u">kg</span></div></div>
               </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Footer */}
-      <div className="px-5 py-3.5 bg-black/20 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
-        <button onClick={handleCopy} className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-medium flex items-center gap-2 transition-all">
-          {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-          <span>{copied ? 'Copied Dossier!' : 'Copy Dossier'}</span>
+      {/* ── Footer ── */}
+      <footer className="dossier-foot">
+        <button className="dossier-btn" onClick={handleCopy}>
+          {copied ? (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{color: 'var(--lime)'}}><path d="M20 6L9 17l-5-5"/></svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+          )}
+          {copied ? 'Copied' : 'Copy Dossier'}
         </button>
-        <div className="flex items-center gap-2">
+        <div className="dossier-foot-right">
           {onSwitchTo2D && (
-            <button onClick={() => onSwitchTo2D(object)} className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-all">
-              <Orbit className="w-4 h-4 text-cyan-400" />
-              <span>2D Orbit Plane</span>
+            <button
+              className="dossier-btn lime-outline"
+              onClick={() => {
+                if (onSwitchTo2D) onSwitchTo2D(object);
+              }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/><ellipse cx="12" cy="12" rx="4.5" ry="9"/></svg>
+              2D Orbit Plane
             </button>
           )}
           {onTrackIn3D && (
-            <button onClick={() => onTrackIn3D(object)} className="px-4 py-2 rounded-xl bg-[#cbd98a] hover:bg-[#e1efa1] text-[#172116] text-xs font-semibold flex items-center gap-2 transition-all">
-              <Crosshair className="w-4 h-4" />
-              <span>Lock in 3D</span>
+            <button
+              className="dossier-btn primary"
+              onClick={() => {
+                if (onTrackIn3D) onTrackIn3D(object);
+              }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg>
+              Lock in 3D
             </button>
           )}
         </div>
-      </div>
+      </footer>
     </div>
   );
 });
