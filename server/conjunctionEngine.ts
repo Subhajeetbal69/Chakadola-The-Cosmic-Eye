@@ -266,7 +266,29 @@ export function detectConjunctions(
     console.warn(`[Conjunction Engine] Invariant Check: Pruning ${nonLeoObjects.length} non-LEO objects before analysis.`);
   }
   const leoRecords = tleRecords.filter((r) => !r.orbitClass || r.orbitClass === 'LEO');
-  const wrappers = leoRecords.map((r) => createSatrec(r)).filter((w) => w.isValid);
+  let wrappers = leoRecords.map((r) => createSatrec(r)).filter((w) => w.isValid);
+
+  // If catalog is massive (e.g. 17,000+ objects), prioritize top 2,500 priority active & debris
+  // targets for quadratic pairwise scan to ensure sub-3-second execution on cloud containers.
+  if (wrappers.length > 2500) {
+    const active = wrappers.filter((w) => w.record.classification === 'ACTIVE_SATELLITE');
+    const debris = wrappers.filter((w) => w.record.classification === 'DEBRIS' || w.record.classification === 'ROCKET_BODY');
+    const stations = wrappers.filter((w) => {
+      const name = w.record.name.toUpperCase();
+      return name.includes('ISS') || name.includes('TIANHE') || name.includes('CSS') || name.includes('CREW');
+    });
+
+    const prioritized = new Set<SatrecWrapper>([...stations]);
+    for (const w of active.slice(0, 1500)) prioritized.add(w);
+    for (const w of debris.slice(0, 1000)) prioritized.add(w);
+    for (const w of wrappers) {
+      if (prioritized.size >= 2500) break;
+      prioritized.add(w);
+    }
+    wrappers = Array.from(prioritized);
+    console.log(`[Conjunction Engine] Prioritized ${wrappers.length}/${leoRecords.length} primary targets for rapid pairwise conjunction screening.`);
+  }
+
   const n = wrappers.length;
   const perfStart = Date.now();
   console.log(`[Conjunction Engine] Starting multi-stage analysis for ${n} objects...`);

@@ -326,11 +326,13 @@ async function startServer() {
   app.use('/api/conjunctions/:id/assess', heavyComputationLimiter);
   app.use('/api/conjunctions/csv', heavyComputationLimiter);
 
-  // Initialize DB and astrodynamics engine
-  await initCoreEngine();
-
   // Create HTTP server for both Express and WebSockets
   const server = http.createServer(app);
+
+  // Initialize DB and astrodynamics engine in background
+  initCoreEngine().catch((err) => {
+    console.error('[Core Engine Startup Error]', err);
+  });
 
   // ── 3. Slowloris & Request Timeout Hardening ──────────────────────
   server.headersTimeout = 60000;   // 60s max to receive HTTP headers
