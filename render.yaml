@@ -1,0 +1,38 @@
+# render.yaml — Render.com Infrastructure-as-Code
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: space-debris-tracker
+    runtime: node
+    region: singapore   # Closest to your Supabase ap-northeast-1 (Tokyo). Adjust if needed.
+    plan: starter        # $7/mo — required for always-on WebSocket support (no spindown)
+    # plan: free         # FREE but spins down after 15 min inactivity — NOT recommended for WS
+
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+
+    # Health check endpoint — Render pings this to verify the service is alive
+    healthCheckPath: /health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      - key: PORT
+        value: 10000      # Render injects its own PORT; this is a safe default
+
+      - key: APP_URL
+        value: https://space-debris-tracker.onrender.com  # Update after first deploy
+
+      - key: GEMINI_API_KEY
+        sync: false       # Must be manually set in Render dashboard (secret)
+
+      - key: DATABASE_URL
+        sync: false       # Must be manually set in Render dashboard (secret)
+
+      - key: SPACETRACK_USER
+        sync: false       # Optional — set only if using Space-Track.org
+
+      - key: SPACETRACK_PASSWORD
+        sync: false       # Optional — set only if using Space-Track.org
