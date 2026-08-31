@@ -92,10 +92,7 @@ export function AlertDetail({ pair, onBack }: { pair: ConjunctionEvent, onBack: 
         <header className="flex items-center justify-between border-b border-white/10 pb-5">
     <div className="flex items-center gap-6">
     <a className="group flex items-center gap-3" href="#top" aria-label="Asteria mission control home">
-      <span className="grid size-9 place-items-center rounded-full border border-[#c9d67a]/50 text-[#d9e68e] transition group-hover:bg-[#c9d67a] group-hover:text-[#162218]">
-        <svg viewBox="0 0 24 24" className="size-4 fill-none stroke-current" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M4 12c1.8-5.4 5.4-8.1 8-8.1s6.2 2.7 8 8.1c-1.8 5.4-5.4 8.1-8 8.1S5.8 17.4 4 12Z"/></svg>
-      </span>
-      <span><span className="block font-mono text-[10px] uppercase tracking-[.25em] text-[#aeb7b0]">Asteria</span><span className="block text-sm tracking-wide">Mission control</span></span>
+      <img src="/Chakadola_LOGO.svg" alt="Chakadola Logo" className="h-16 w-auto" />
     </a>
     <nav className="hidden sm:flex items-center gap-1 p-1 bg-slate-950/80 border border-white/10 rounded-2xl shadow-inner backdrop-blur-xl">
       <NavLink to="/" className={({ isActive }) => `px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${isActive ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
@@ -196,7 +193,7 @@ function ConjunctionLibrary({ pairs, onSelect, headerArgs }: { pairs: Conjunctio
   return <main className="relative min-h-screen overflow-hidden bg-[#071019] text-[#edf2ec]"><div className="earth-banner" style={{ backgroundImage: `url(${earthBg})` }} /><div className="relative z-10 mx-auto min-h-screen max-w-[1440px] px-5 py-5 sm:px-8 lg:px-12 lg:py-8">
     <header className="flex items-center justify-between border-b border-white/10 pb-5">
       <div className="flex items-center gap-6">
-        <a className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-full border border-[#c9d67a]/50 text-[#d9e68e]"><svg viewBox="0 0 24 24" className="size-4 fill-none stroke-current" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M4 12c1.8-5.4 5.4-8.1 8-8.1s6.2 2.7 8 8.1c-1.8 5.4-5.4 8.1-8 8.1S5.8 17.4 4 12Z"/></svg></span><span><span className="block font-mono text-[10px] uppercase tracking-[.25em] text-[#aeb7b0]">Asteria</span><span className="block text-sm tracking-wide">Mission control</span></span></a>
+        <a className="flex items-center gap-3"><img src="/Chakadola_LOGO.svg" alt="Chakadola Logo" className="h-16 w-auto" /></a>
         <nav className="hidden sm:flex items-center gap-1 p-1 bg-slate-950/80 border border-white/10 rounded-2xl shadow-inner backdrop-blur-xl">
           <NavLink to="/" className={({ isActive }) => `px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${isActive ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
             <Compass className="w-3.5 h-3.5 text-blue-400" /><span>Mission Control</span>

@@ -57,10 +57,7 @@ export function MissionHUD() {
     <>
       {/* ── Top Left: Mission Control Branding (Image 2) ── */}
       <div className="fixed top-6 left-8 z-40 pointer-events-none hidden md:flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
-        <span className="font-['Orbitron'] text-[11px] font-bold tracking-[0.25em] text-slate-300 uppercase">
-          MISSION CONTROL
-        </span>
+        <img src="/Chakadola_LOGO.svg" alt="Chakadola Logo" className="h-20 w-auto opacity-90" />
       </div>
 
       {/* ── Top Right: Lunar Sector Status (Image 2) ── */}
@@ -69,7 +66,7 @@ export function MissionHUD() {
           LUNAR EXPLORATION
         </span>
         <span className="text-[9px] font-semibold tracking-[0.15em] text-slate-500 uppercase mt-0.5">
-          SECTOR MARE-IX &nbsp;•&nbsp; <span className="text-emerald-400">LIVE</span>
+          PRAGYAN ROVER &nbsp;•&nbsp; <span className="text-emerald-400">LIVE</span>
         </span>
       </div>
 

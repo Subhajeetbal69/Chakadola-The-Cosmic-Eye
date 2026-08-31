@@ -66,7 +66,6 @@ function SectionText() {
         }}
       >
         <div className="hero-tagline">
-          MISSION CONTROL &nbsp;•&nbsp; LUNAR EXPLORATION
         </div>
         <h1 className="hero-title">
           BEGIN THE<br />MISSION
