@@ -397,6 +397,7 @@ export function EarthPage() {
             <Orbit2DView
               objects={objects}
               selectedConjunction={selectedConjunction}
+              selectedObject={selectedObject}
               syncState={conjunctionSyncState}
               onSelectObject={(obj) => {
                 setSelectedObject(obj);

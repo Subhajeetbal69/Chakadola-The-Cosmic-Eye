@@ -14,6 +14,7 @@ import { TrackedObjectSummary, ConjunctionEvent, ConjunctionSyncState } from '..
 interface Orbit2DViewProps {
   objects: TrackedObjectSummary[];
   selectedConjunction: ConjunctionEvent | null;
+  selectedObject?: TrackedObjectSummary | null;
   syncState?: ConjunctionSyncState | null;
   onSelectObject?: (obj: TrackedObjectSummary) => void;
   onResetSync?: () => void;
@@ -22,6 +23,7 @@ interface Orbit2DViewProps {
 export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
   objects = [],
   selectedConjunction,
+  selectedObject,
   syncState = null,
   onSelectObject,
   onResetSync,
@@ -226,6 +228,12 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
       for (const obj of objects) {
         if (!obj || !obj.orbitSample || obj.orbitSample.length === 0) continue;
         const isConjunctionPair = selectedConjunction && (selectedConjunction.objectA?.id === obj.id || selectedConjunction.objectB?.id === obj.id);
+        const selectedObjectMatchesConjunction = selectedConjunction && selectedObject && (selectedConjunction.objectA?.id === selectedObject.id || selectedConjunction.objectB?.id === selectedObject.id);
+        const mode = (selectedConjunction && (!selectedObject || selectedObjectMatchesConjunction)) ? 'CONJUNCTION' : (selectedObject ? 'OBJECT' : 'ALL');
+
+        if (mode === 'CONJUNCTION' && !isConjunctionPair) continue;
+        if (mode === 'OBJECT' && selectedObject?.id !== obj.id) continue;
+
         const isHovered = hoveredObject?.id === obj.id;
         if (isConjunctionPair || isHovered) {
           ctx.beginPath();
@@ -244,20 +252,28 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
       const currentSimStep = simTimeStepRef.current;
       for (const obj of objects) {
         if (!obj) continue;
+        const isConjunctionPair = selectedConjunction && (selectedConjunction.objectA?.id === obj.id || selectedConjunction.objectB?.id === obj.id);
+        const selectedObjectMatchesConjunction = selectedConjunction && selectedObject && (selectedConjunction.objectA?.id === selectedObject.id || selectedConjunction.objectB?.id === selectedObject.id);
+        const mode = (selectedConjunction && (!selectedObject || selectedObjectMatchesConjunction)) ? 'CONJUNCTION' : (selectedObject ? 'OBJECT' : 'ALL');
+
+        if (mode === 'CONJUNCTION' && !isConjunctionPair) continue;
+        if (mode === 'OBJECT' && selectedObject?.id !== obj.id) continue;
+
         const sampleIdx = currentSimStep % (obj.orbitSample?.length || 1);
         const rawPt = obj.currentPosition || obj.positionKm;
         const pt = obj.orbitSample && obj.orbitSample[sampleIdx] ? obj.orbitSample[sampleIdx] : rawPt;
         if (!pt) continue;
         const { px, py } = project(pt.x, pt.y, pt.z);
-        const isConjunctionPair = selectedConjunction && (selectedConjunction.objectA?.id === obj.id || selectedConjunction.objectB?.id === obj.id);
         const isHovered = hoveredObject?.id === obj.id;
+        const isSelected = selectedObject?.id === obj.id && mode === 'OBJECT';
+        
         ctx.beginPath();
         let dotRadius = 1.3;
-        if (isConjunctionPair) dotRadius = 5; else if (isHovered) dotRadius = 4.5;
+        if (isConjunctionPair || isSelected) dotRadius = 5; else if (isHovered) dotRadius = 4.5;
         ctx.arc(px, py, dotRadius, 0, Math.PI * 2);
         ctx.fillStyle = obj.classification === 'DEBRIS' ? '#ff2244' : obj.classification === 'ROCKET_BODY' ? '#00d4ff' : '#00ff66';
         ctx.fill();
-        if (isConjunctionPair || isHovered) {
+        if (isConjunctionPair || isHovered || isSelected) {
           ctx.beginPath();
           ctx.arc(px, py, 9, 0, Math.PI * 2);
           ctx.strokeStyle = '#ffffff';
@@ -270,7 +286,10 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
       }
     }
 
-    if (selectedConjunction && Array.isArray(objects)) {
+    const selectedObjectMatchesConjunction = selectedConjunction && selectedObject && (selectedConjunction.objectA?.id === selectedObject.id || selectedConjunction.objectB?.id === selectedObject.id);
+    const mode = (selectedConjunction && (!selectedObject || selectedObjectMatchesConjunction)) ? 'CONJUNCTION' : (selectedObject ? 'OBJECT' : 'ALL');
+
+    if (mode === 'CONJUNCTION' && selectedConjunction && Array.isArray(objects)) {
       const objA = objects.find((o) => o.id === selectedConjunction.objectA?.id);
       const objB = objects.find((o) => o.id === selectedConjunction.objectB?.id);
       const posA = objA?.currentPosition || objA?.positionKm || selectedConjunction.positionAAtTca;
@@ -346,6 +365,13 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
     if (Array.isArray(objects)) {
       for (const obj of objects) {
         if (!obj) continue;
+        const isConjunctionPair = selectedConjunction && (selectedConjunction.objectA?.id === obj.id || selectedConjunction.objectB?.id === obj.id);
+        const selectedObjectMatchesConjunction = selectedConjunction && selectedObject && (selectedConjunction.objectA?.id === selectedObject.id || selectedConjunction.objectB?.id === selectedObject.id);
+        const mode = (selectedConjunction && (!selectedObject || selectedObjectMatchesConjunction)) ? 'CONJUNCTION' : (selectedObject ? 'OBJECT' : 'ALL');
+
+        if (mode === 'CONJUNCTION' && !isConjunctionPair) continue;
+        if (mode === 'OBJECT' && selectedObject?.id !== obj.id) continue;
+
         const sampleIdx = currentSimStep % (obj.orbitSample?.length || 1);
         const rawPt = obj.currentPosition || obj.positionKm;
         const pt = obj.orbitSample && obj.orbitSample[sampleIdx] ? obj.orbitSample[sampleIdx] : rawPt;
@@ -390,6 +416,13 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
     if (Array.isArray(objects)) {
       for (const obj of objects) {
         if (!obj) continue;
+        const isConjunctionPair = selectedConjunction && (selectedConjunction.objectA?.id === obj.id || selectedConjunction.objectB?.id === obj.id);
+        const selectedObjectMatchesConjunction = selectedConjunction && selectedObject && (selectedConjunction.objectA?.id === selectedObject.id || selectedConjunction.objectB?.id === selectedObject.id);
+        const mode = (selectedConjunction && (!selectedObject || selectedObjectMatchesConjunction)) ? 'CONJUNCTION' : (selectedObject ? 'OBJECT' : 'ALL');
+
+        if (mode === 'CONJUNCTION' && !isConjunctionPair) continue;
+        if (mode === 'OBJECT' && selectedObject?.id !== obj.id) continue;
+
         const sampleIdx = currentSimStep % (obj.orbitSample?.length || 1);
         const rawPt = obj.currentPosition || obj.positionKm;
         const pt = obj.orbitSample && obj.orbitSample[sampleIdx] ? obj.orbitSample[sampleIdx] : rawPt;
@@ -407,6 +440,18 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
     if (found && onSelectObject) {
       onSelectObject(found);
     }
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    // deltaY < 0 is scroll up (zoom in), deltaY > 0 is scroll down (zoom out)
+    let newZoom = targetZoomRef.current;
+    if (e.deltaY < 0) {
+      newZoom = Math.min(4.0, newZoom + 0.15);
+    } else if (e.deltaY > 0) {
+      newZoom = Math.max(0.5, newZoom - 0.15);
+    }
+    targetZoomRef.current = newZoom;
+    setZoomDisplay(Number(newZoom.toFixed(1)));
   };
 
   const handleResetTime = () => {
@@ -493,6 +538,7 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
           onMouseMove={handleMouseMove}
           onClick={handleCanvasClick}
           onTouchStart={handleTouchStart}
+          onWheel={handleWheel}
           onMouseLeave={() => { setHoveredObject(null); setTooltipPos(null); }}
           className="w-full h-full block cursor-crosshair touch-none"
         />
