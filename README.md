@@ -20,8 +20,9 @@ The system ingests Two-Line Element (TLE) datasets from CelesTrak and Space-Trac
                       ┌──────────────────────────────────────┐
                       │  Tier 1: CelesTrak GP Elements (TLE) │
                       │  Tier 2: Public REST TLE Mirror      │
-                      │  Tier 3: Space-Track.org (Auth)      │
-                      │  Tier 5: Local Baseline Snapshot     │
+                      │  Tier 3: Space-Track.org (Auth)      |
+                      │  Tier 4: Active Database Snapshot    |
+                      │  Tier 5: Static Cold Bootstrap       │
                       └──────────────────┬───────────────────┘
                                          │ HTTP GET (with Circuit Breaker)
                                          ▼
@@ -245,7 +246,7 @@ The system features a dual-database persistence engine (`server/db.ts`):
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/omprakashkar-2529/Space_Debris_Tracker.git
+git clone https://github.com/Subhajeetbal69/Space_Debris_Tracker
 cd Space_Debris_Tracker
 ```
 
