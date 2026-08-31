@@ -4,21 +4,8 @@ import { EarthScene, ZoomAction } from '../components/earth/EarthScene';
 import { Orbit2DView } from '../components/Orbit2DView';
 import { TrackedObjectsCatalog } from '../components/TrackedObjectsCatalog';
 import { useTelemetry } from '../context/TelemetryContext';
-import {
-  Globe,
-  Orbit,
-  Layers,
-  ShieldAlert,
-  ArrowRight,
-  Maximize2,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
-  Gauge,
-  X,
-  Radio,
-  Compass
-} from 'lucide-react';
+import { Play, Pause, FastForward, RotateCcw, AlertTriangle, ChevronRight, Share2, Globe, Orbit, MousePointer2, Move, Clock, Info, Rocket, Orbit as OrbitIcon, Navigation, RotateCw, ZoomIn, Lock, Focus, Map as MapIcon, Compass, ShieldAlert, Zap, Layers, RefreshCw, ZoomOut, Gauge, X, Radio } from 'lucide-react';
+import { NavPill } from '../components/NavPill';
 import './EarthPage.css';
 
 /**
@@ -70,48 +57,8 @@ export function EarthPage() {
       {/* ── Top Aerospace Navigation Bar (Unified Responsive Container) ── */}
       <header className="fixed top-2.5 sm:top-4 left-1/2 -translate-x-1/2 z-40 pointer-events-auto flex flex-col items-center gap-1 sm:gap-1.5 p-1 sm:p-1.5 bg-slate-900/90 border border-white/15 rounded-2xl shadow-2xl backdrop-blur-xl max-w-[96vw]">
         {/* Main Navigation Strip */}
-        <div className="flex items-center gap-1 sm:gap-2">
-          <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 text-xs font-mono font-bold text-cyan-400 border-r border-white/10">
-            <Radio className="w-3.5 h-3.5 animate-pulse text-cyan-400" />
-            <span>ORBITAL VIEW</span>
-          </div>
-
-          <Link
-            to="/"
-            className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1 sm:gap-1.5 bg-white/5 hover:bg-white/15 border border-transparent text-slate-300 hover:text-white transition-all cursor-pointer whitespace-nowrap"
-            title="Switch to Mission Control Lunar Center"
-          >
-            <Compass className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400" />
-            <span>Mission Control</span>
-          </Link>
-
-          <Link
-            to="/earth"
-            className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1 sm:gap-1.5 bg-cyan-600/40 border border-cyan-400/60 text-white shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all cursor-pointer whitespace-nowrap"
-            title="Earth Orbital & Space Debris Tracker"
-          >
-            <Globe className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-cyan-300" />
-            <span>Earth Tracking</span>
-          </Link>
-
-          <Link
-            to="/alert"
-            className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1 sm:gap-1.5 bg-white/5 hover:bg-red-600/30 hover:border-red-400/50 border border-transparent text-slate-300 hover:text-white transition-all cursor-pointer relative whitespace-nowrap"
-            title="View conjunction threats & AI avoidance center"
-          >
-            <ShieldAlert className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-red-400" />
-            <span>Alert Center</span>
-            {conjCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-bold bg-red-500 text-white animate-pulse">
-                {conjCount}
-              </span>
-            )}
-          </Link>
-
-          <div className="hidden lg:flex items-center gap-1.5 pl-2 pr-1 border-l border-white/10 text-[10px] font-mono text-slate-400">
-            <span className={`w-2 h-2 rounded-full ${isWsConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-            <span>{isWsConnected ? 'LIVE FEED' : 'SYNCED'}</span>
-          </div>
+        <div className="flex items-center justify-between sm:justify-start gap-2">
+          <NavPill conjCount={conjCount} />
         </div>
 
         {/* Mobile & Tablet Sub-Row (Contained inside same flex wrapper = Zero overlap on iPad Pro / Tablets) */}

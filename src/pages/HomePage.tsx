@@ -9,6 +9,7 @@ import LoadingScreen from '../components/moon/LoadingScreen';
 import missionState from '../stores/missionStore';
 import { useTelemetry } from '../context/TelemetryContext';
 import { Globe, ShieldAlert, Radio } from 'lucide-react';
+import { NavPill } from '../components/NavPill';
 
 /**
  * SectionText — dynamic text transitions triggered by scroll progress.
@@ -148,43 +149,12 @@ function ScrollIndicator() {
  * HomeNavbar — floating aerospace top dock for fast jumping between pages.
  */
 function HomeNavbar() {
-  const { isWsConnected, conjunctions } = useTelemetry();
+  const { conjunctions } = useTelemetry();
   const conjCount = conjunctions.length;
 
   return (
-    <div className="fixed top-3 sm:top-5 left-1/2 -translate-x-1/2 z-50 pointer-events-auto flex items-center gap-1 sm:gap-2 p-1 sm:p-1.5 bg-slate-900/80 border border-white/15 rounded-2xl shadow-2xl backdrop-blur-xl max-w-[96vw]">
-      <div className="flex items-center gap-1.5 px-2 sm:px-3 py-1 text-[11px] sm:text-xs font-mono font-bold text-cyan-400 border-r border-white/10">
-        <Radio className="w-3.5 h-3.5 animate-pulse text-cyan-400" />
-        <span className="hidden sm:inline">MISSION 01</span>
-      </div>
-
-      <Link
-        to="/earth"
-        className="px-2.5 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 bg-white/5 hover:bg-cyan-600/30 hover:border-cyan-400/50 border border-transparent text-slate-200 hover:text-white transition-all cursor-pointer whitespace-nowrap"
-        title="View 3D & 2D Earth satellite and space debris tracking"
-      >
-        <Globe className="w-3.5 h-3.5 text-cyan-400" />
-        <span>Earth Tracking</span>
-      </Link>
-
-      <Link
-        to="/alert"
-        className="px-2.5 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 bg-white/5 hover:bg-red-600/30 hover:border-red-400/50 border border-transparent text-slate-200 hover:text-white transition-all cursor-pointer relative whitespace-nowrap"
-        title="View conjunction warnings and AI collision avoidance center"
-      >
-        <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-        <span>Alert Center</span>
-        {conjCount > 0 && (
-          <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-bold bg-red-500 text-white animate-pulse">
-            {conjCount}
-          </span>
-        )}
-      </Link>
-
-      <div className="hidden lg:flex items-center gap-1.5 pl-2 pr-1 border-l border-white/10 text-[10px] font-mono text-slate-400">
-        <span className={`w-2 h-2 rounded-full ${isWsConnected ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
-        <span>{isWsConnected ? 'LIVE FEED' : 'READY'}</span>
-      </div>
+    <div className="fixed top-3 sm:top-5 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
+      <NavPill conjCount={conjCount} />
     </div>
   );
 }

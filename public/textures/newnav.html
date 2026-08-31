@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nav Pill — Asteria Mission Control</title>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #071019;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: ui-monospace, "Cascadia Code", "Fira Mono", monospace;
+    }
+
+    /* ── Outer wrapper ───────────────────────────────────────────── */
+    .pill-wrapper {
+      display: inline-flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    /* ── The pill ────────────────────────────────────────────────── */
+    .pill {
+      position: relative;
+      display: flex;
+      align-items: stretch;
+      padding: 4px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(11, 23, 32, 0.80);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    /* ── Sliding active indicator ────────────────────────────────── */
+    .indicator {
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      border-radius: 13px;
+      pointer-events: none;
+      transition: left 0.48s cubic-bezier(0.16, 1, 0.3, 1),
+                  width 0.48s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow: hidden;
+    }
+
+    /* top glow line */
+    .indicator::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 14%;
+      right: 14%;
+      height: 1px;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        #e9f2a3,
+        transparent
+      );
+      box-shadow: 0 0 14px 2px rgba(203, 217, 138, 0.72);
+    }
+
+    /* radial glow body */
+    .indicator::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(
+        ellipse 62% 100% at 50% 0%,
+        rgba(203, 217, 138, 0.22),
+        transparent 72%
+      );
+    }
+
+    /* ── Tab buttons ─────────────────────────────────────────────── */
+    .tab {
+      position: relative;
+      z-index: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 16px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      border-radius: 13px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      color: rgba(255, 255, 255, 0.70);
+      transition: color 0.18s ease;
+      user-select: none;
+    }
+
+    .tab:hover { color: rgba(255, 255, 255, 1); }
+    .tab.active { color: #e9f2a3; }
+
+    .tab svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+
+    /* ── Badge (Alert count) ─────────────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 22px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: rgba(241, 139, 120, 0.18);
+      border: 1px solid rgba(241, 139, 120, 0.40);
+      color: #ffae9d;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      line-height: 1;
+    }
+
+    /* ── Live feed label (outside pill) ─────────────────────────── */
+    .live-feed {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.20em;
+      text-transform: uppercase;
+      color: rgba(174, 183, 176, 0.80);
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #aeca6a;
+      box-shadow: 0 0 10px 3px rgba(201, 214, 122, 0.70);
+      animation: pulse 2.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.45; }
+    }
+
+    /* ── Demo context label ───────────────────────────────────────── */
+    .context {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: inherit;
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(131, 144, 135, 0.55);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="pill-wrapper">
+
+    <!-- ── Pill nav ── -->
+    <nav class="pill" id="pill" role="tablist" aria-label="Mission navigation">
+
+      <!-- Sliding indicator (positioned by JS) -->
+      <div class="indicator" id="indicator"></div>
+
+      <!-- Tab 1 — Mission -->
+      <button class="tab active" role="tab" aria-selected="true" data-index="0">
+        <!-- signal / antenna icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 18a6 6 0 0 0 0-12"/>
+          <path d="M12 22a10 10 0 0 0 0-20"/>
+          <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+        </svg>
+        Mission
+      </button>
+
+      <!-- Tab 2 — Earth Tracking -->
+      <button class="tab" role="tab" aria-selected="false" data-index="1">
+        <!-- globe icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M3.6 9h16.8M3.6 15h16.8"/>
+          <path d="M12 3C9.5 6.5 8 9.1 8 12s1.5 5.5 4 9"/>
+          <path d="M12 3c2.5 3.5 4 6.1 4 9s-1.5 5.5-4 9"/>
+        </svg>
+        Earth Tracking
+      </button>
+
+      <!-- Tab 3 — Alert Center -->
+      <button class="tab" role="tab" aria-selected="false" data-index="2">
+        <!-- shield icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3 5 6v5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6l-7-3Z"/>
+        </svg>
+        Alert Center
+        <span class="badge" aria-label="550 alerts">550</span>
+      </button>
+
+    </nav>
+
+    <!-- ── Live feed status (outside pill) ── -->
+    <span class="live-feed" aria-label="Live feed active">
+      <span class="live-dot" aria-hidden="true"></span>
+      Live Feed
+    </span>
+
+  </div>
+
+  <p class="context">Asteria Mission Control · Nav Pill</p>
+
+  <script>
+    const pill      = document.getElementById('pill');
+    const indicator = document.getElementById('indicator');
+    const tabs      = Array.from(pill.querySelectorAll('.tab'));
+
+    function positionIndicator(tab) {
+      // tab.offsetLeft is relative to pill; subtract the 4px padding
+      indicator.style.left  = tab.offsetLeft + 'px';
+      indicator.style.width = tab.offsetWidth + 'px';
+    }
+
+    function activate(tab) {
+      tabs.forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+      });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      positionIndicator(tab);
+    }
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => activate(tab));
+    });
+
+    // Initial position — no transition on first paint
+    indicator.style.transition = 'none';
+    positionIndicator(tabs[0]);
+    // Re-enable transition after first frame
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        indicator.style.transition = '';
+      });
+    });
+
+    // Reposition on resize
+    window.addEventListener('resize', () => {
+      const active = pill.querySelector('.tab.active');
+      if (active) positionIndicator(active);
+    });
+  </script>
+
+</body>
+</html>

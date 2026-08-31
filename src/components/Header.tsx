@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { NavPill } from './NavPill';
 import {
   Satellite,
   ShieldAlert,
@@ -159,54 +160,9 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Navigation Tabs (Home, Earth, Alert) */}
           <div className="flex items-center justify-between sm:justify-start gap-2">
-            <nav className="flex items-center gap-1 p-1 bg-slate-950/80 border border-white/10 rounded-2xl shadow-inner backdrop-blur-xl overflow-x-auto no-scrollbar w-full sm:w-auto justify-around sm:justify-start">
-              <NavLink
-                to="/"
-                className={({ isActive }) =>
-                  `px-2.5 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
-                  }`
-                }
-              >
-                <Compass className="w-3.5 h-3.5 text-blue-400" />
-                <span>Mission Control</span>
-              </NavLink>
-
-              <NavLink
-                to="/earth"
-                className={({ isActive }) =>
-                  `px-2.5 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
-                    isActive
-                      ? 'bg-cyan-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)]'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
-                  }`
-                }
-              >
-                <Globe className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Earth Tracking</span>
-              </NavLink>
-
-              <NavLink
-                to="/alert"
-                className={({ isActive }) =>
-                  `px-2.5 sm:px-3.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer relative whitespace-nowrap ${
-                    isActive
-                      ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
-                  }`
-                }
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-                <span>Alert Center</span>
-                {conjCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] font-bold bg-red-500 text-white animate-pulse">
-                    {conjCount}
-                  </span>
-                )}
-              </NavLink>
-            </nav>
+            <div className="overflow-x-auto no-scrollbar w-full sm:w-auto">
+              <NavPill conjCount={conjCount} />
+            </div>
 
             {/* Real-time Clock on Desktop */}
             <div className="hidden lg:flex items-center gap-2 bg-slate-950/80 px-3 py-1.5 rounded-xl border border-cyan-500/30 shadow-inner">

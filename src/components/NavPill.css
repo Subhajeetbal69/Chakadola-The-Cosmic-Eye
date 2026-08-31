@@ -1,0 +1,138 @@
+/* ── Outer wrapper ───────────────────────────────────────────── */
+.pill-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* ── The pill ────────────────────────────────────────────────── */
+.pill {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  padding: 4px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(11, 23, 32, 0.80);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Sliding active indicator ────────────────────────────────── */
+.pill .indicator {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 13px;
+  pointer-events: none;
+  transition: left 0.48s cubic-bezier(0.16, 1, 0.3, 1),
+              width 0.48s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+/* top glow line */
+.pill .indicator::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 14%;
+  right: 14%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #e9f2a3,
+    transparent
+  );
+  box-shadow: 0 0 14px 2px rgba(203, 217, 138, 0.72);
+}
+
+/* radial glow body */
+.pill .indicator::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 62% 100% at 50% 0%,
+    rgba(203, 217, 138, 0.22),
+    transparent 72%
+  );
+}
+
+/* ── Tab buttons ─────────────────────────────────────────────── */
+.pill .tab {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 13px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.70);
+  transition: color 0.18s ease;
+  user-select: none;
+  text-decoration: none;
+}
+
+.pill .tab:hover { color: rgba(255, 255, 255, 1); }
+.pill .tab.active { color: #e9f2a3; }
+
+.pill .tab svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* ── Badge (Alert count) ─────────────────────────────────────── */
+.pill .badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(241, 139, 120, 0.18);
+  border: 1px solid rgba(241, 139, 120, 0.40);
+  color: #ffae9d;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+/* ── Live feed label (outside pill) ─────────────────────────── */
+.live-feed {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: rgba(174, 183, 176, 0.80);
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #aeca6a;
+  box-shadow: 0 0 10px 3px rgba(201, 214, 122, 0.70);
+  animation: pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}

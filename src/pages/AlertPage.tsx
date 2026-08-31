@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { NavLink } from 'react-router-dom';
+import { NavPill } from '../components/NavPill';
 import { Compass, Globe, ShieldAlert, Sparkles, Activity, CheckCircle2, RotateCw, Play, AlertTriangle, ShieldCheck, Zap } from 'lucide-react';
 import { SatelliteDossierInline } from "../components/SatelliteDossierInline";
 import { useTelemetry } from "../context/TelemetryContext";
@@ -89,22 +90,14 @@ export function AlertDetail({ pair, onBack }: { pair: ConjunctionEvent, onBack: 
     <main className="min-h-full overflow-hidden bg-[#071019] text-[#edf2ec] selection:bg-[#c9d67a] selection:text-[#142015]">
       <div className="atmosphere" />
       <div className="relative mx-auto flex min-h-screen max-w-[1440px] flex-col px-5 py-5 sm:px-8 lg:px-12 lg:py-8">
-        <header className="flex items-center justify-between border-b border-white/10 pb-5">
+        <header className="relative flex items-center justify-between border-b border-white/10 pb-5">
     <div className="flex items-center gap-6">
     <a className="group flex items-center gap-3" href="#top" aria-label="Asteria mission control home">
       <img src="/Chakadola_LOGO.svg" alt="Chakadola Logo" className="h-16 w-auto" />
     </a>
-    <nav className="hidden sm:flex items-center gap-1 p-1 bg-slate-950/80 border border-white/10 rounded-2xl shadow-inner backdrop-blur-xl">
-      <NavLink to="/" className={({ isActive }) => `px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${isActive ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-        <Compass className="w-3.5 h-3.5 text-blue-400" /><span>Mission Control</span>
-      </NavLink>
-      <NavLink to="/earth" className={({ isActive }) => `px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${isActive ? 'bg-cyan-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-        <Globe className="w-3.5 h-3.5 text-cyan-400" /><span>Earth Tracking</span>
-      </NavLink>
-      <NavLink to="/alert" className={({ isActive }) => `px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${isActive ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-        <ShieldAlert className="w-3.5 h-3.5 text-red-400" /><span>Alert Center</span>
-      </NavLink>
-    </nav>
+    </div>
+    <div className="absolute left-1/2 -translate-x-1/2 hidden sm:block">
+      <NavPill hideLiveFeed={true} />
     </div>
     <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[.16em] text-[#aeb7b0]">
       <button onClick={onBack} className="rounded-full border border-white/15 px-3 py-1.5 transition hover:border-[#cbd98a]/60 hover:text-[#dce9a0]">← All conjunctions</button>
@@ -191,21 +184,12 @@ function ConjunctionLibrary({ pairs, onSelect, headerArgs }: { pairs: Conjunctio
   const visible = sort ? [...filtered].sort((a, b) => (Number(sortValue(a, sort.key)) - Number(sortValue(b, sort.key))) * sort.dir) : filtered;
   
   return <main className="relative min-h-screen overflow-hidden bg-[#071019] text-[#edf2ec]"><div className="earth-banner" style={{ backgroundImage: `url(${earthBg})` }} /><div className="relative z-10 mx-auto min-h-screen max-w-[1440px] px-5 py-5 sm:px-8 lg:px-12 lg:py-8">
-    <header className="flex items-center justify-between border-b border-white/10 pb-5">
+    <header className="relative flex items-center justify-between border-b border-white/10 pb-5">
       <div className="flex items-center gap-6">
         <a className="flex items-center gap-3"><img src="/Chakadola_LOGO.svg" alt="Chakadola Logo" className="h-16 w-auto" /></a>
-        <nav className="hidden sm:flex items-center gap-1 p-1 bg-slate-950/80 border border-white/10 rounded-2xl shadow-inner backdrop-blur-xl">
-          <NavLink to="/" className={({ isActive }) => `px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${isActive ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-            <Compass className="w-3.5 h-3.5 text-blue-400" /><span>Mission Control</span>
-          </NavLink>
-          <NavLink to="/earth" className={({ isActive }) => `px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${isActive ? 'bg-cyan-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-            <Globe className="w-3.5 h-3.5 text-cyan-400" /><span>Earth Tracking</span>
-          </NavLink>
-          <NavLink to="/alert" className={({ isActive }) => `px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap ${isActive ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-            <ShieldAlert className="w-3.5 h-3.5 text-red-400" /><span>Alert Center</span>
-            {pairs.length > 0 && <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white animate-pulse">{pairs.length}</span>}
-          </NavLink>
-        </nav>
+      </div>
+      <div className="absolute left-1/2 -translate-x-1/2 hidden sm:block">
+        <NavPill conjCount={pairs?.length || 0} hideLiveFeed={true} />
       </div>
       <div className="flex items-center gap-3"><span className="hidden items-center gap-2 rounded-full border border-white/12 bg-black/20 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[.16em] text-[#9ba69e] sm:flex"><span className="size-1.5 rounded-full bg-[#aeca6a] shadow-[0_0_10px_#c9d67a]" /> Live stream · 2 ms</span><span className="hidden font-mono text-[10px] tracking-[.12em] text-[#c7d0c8] md:inline">{clock} UTC</span></div>
     </header>
