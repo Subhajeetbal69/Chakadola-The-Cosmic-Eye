@@ -282,7 +282,10 @@ export function detectConjunctions(
   // the true TCA can be up to 30s away from the nearest sample,
   // giving a sampled distance of ~450 km even for a 0 km TCA.
   // Use 500 km as a conservative screening threshold.
-  const SCREENING_THRESHOLD_SQ = 500 * 500;
+  // Screening threshold for trajectory distance comparison.
+  // At 60-second steps, 250 km provides a generous margin around true TCAs
+  // while keeping memory allocations and queue sizes lean.
+  const SCREENING_THRESHOLD_SQ = 250 * 250;
 
   const totalSteps = Math.floor((config.predictionHours * 3600) / config.timeStepSeconds);
   const stepMs = config.timeStepSeconds * 1000;
@@ -291,10 +294,10 @@ export function detectConjunctions(
   // Fast Keplerian position-only trajectory generator.
   // Pre-computes the PQW→ECI rotation matrix once per object;
   // only the mean anomaly varies across time steps.
-  // Returns Vector3D[] (positions only) — no velocity, lat/lng, or
-  // Date allocations — for maximum throughput in the screening loop.
+  // Returns Float64Array (interleaved [x0, y0, z0, x1, y1, z1, ...])
+  // to avoid allocating millions of tiny JS heap objects in memory.
   // ═══════════════════════════════════════════════════════════════
-  function generatePositionTrajectory(record: TleRecord): Vector3D[] {
+  function generatePositionTrajectory(record: TleRecord): Float64Array {
     const incRad = (record.inclinationDeg * Math.PI) / 180;
     const raanRad = (record.raanDeg * Math.PI) / 180;
     const argPerRad = (record.argPerigeeDeg * Math.PI) / 180;
@@ -326,7 +329,7 @@ export function detectConjunctions(
     const initialM = ((record.meanAnomalyDeg || 0) * Math.PI) / 180;
     const sqrtOneMinusEccSq = Math.sqrt(1 - ecc * ecc);
 
-    const positions = new Array<Vector3D>(totalSteps + 1);
+    const positions = new Float64Array((totalSteps + 1) * 3);
     let currentMs = startMs;
 
     for (let i = 0; i <= totalSteps; i++) {
@@ -356,12 +359,11 @@ export function detectConjunctions(
       const xp = r * cosNu;
       const yp = r * sinNu;
 
-      // Transform perifocal → ECI using pre-computed rotation
-      positions[i] = {
-        x: xp * Px + yp * Qx,
-        y: xp * Py + yp * Qy,
-        z: xp * Pz + yp * Qz
-      };
+      // Transform perifocal → ECI into interleaved flat buffer
+      const idx = i * 3;
+      positions[idx] = xp * Px + yp * Qx;
+      positions[idx + 1] = xp * Py + yp * Qy;
+      positions[idx + 2] = xp * Pz + yp * Qz;
 
       currentMs += stepMs;
     }
@@ -401,13 +403,12 @@ export function detectConjunctions(
   candidateList.sort((a, b) => a.minR - b.minR);
 
   // ═══════════════════════════════════════════════════════════════
-  // LRU-bounded position trajectory cache
-  // Limits memory to ~MAX_CACHE × 1441 × 24 bytes ≈ 104 MB
+  // LRU-bounded flat Float64Array position trajectory cache
   // ═══════════════════════════════════════════════════════════════
-  const MAX_CACHE = 3000;
-  const trajCache = new Map<number, Vector3D[]>();
+  const MAX_CACHE = 2500;
+  const trajCache = new Map<number, Float64Array>();
 
-  function getCachedTraj(obj: CandidateObj): Vector3D[] {
+  function getCachedTraj(obj: CandidateObj): Float64Array {
     const key = obj.idx;
     if (trajCache.has(key)) return trajCache.get(key)!;
     // Evict oldest entries if cache is at capacity (Map preserves insertion order)
@@ -444,7 +445,7 @@ export function detectConjunctions(
   for (let i = 0; i < candidateList.length; i++) {
     const objA = candidateList[i];
     const isJunkA = objA.classification === 'DEBRIS' || objA.classification === 'ROCKET_BODY';
-    let trajA: Vector3D[] | null = null; // lazy-loaded per outer iteration
+    let trajA: Float64Array | null = null; // lazy-loaded per outer iteration
 
     for (let j = i + 1; j < candidateList.length; j++) {
       const objB = candidateList[j];
@@ -507,11 +508,12 @@ export function detectConjunctions(
       let minIdx = -1;
 
       // Full scan at config.timeStepSeconds resolution using squared
-      // distance (avoids Math.sqrt in the hot inner loop).
+      // distance over flat Float64Array buffer (avoids object lookups).
       for (let k = 0; k <= totalSteps; k++) {
-        const dx = trajA[k].x - trajB[k].x;
-        const dy = trajA[k].y - trajB[k].y;
-        const dz = trajA[k].z - trajB[k].z;
+        const offset = k * 3;
+        const dx = trajA[offset] - trajB[offset];
+        const dy = trajA[offset + 1] - trajB[offset + 1];
+        const dz = trajA[offset + 2] - trajB[offset + 2];
         const dSq = dx * dx + dy * dy + dz * dz;
         if (dSq < minDistSq) {
           minDistSq = dSq;
