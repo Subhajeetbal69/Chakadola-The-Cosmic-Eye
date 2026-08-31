@@ -45,8 +45,13 @@ export function exportConjunctionsToCSV(
     'Relative_Speed_km_h',
     'Relative_Speed_Mach',
     'Distance_Score_Component',
-    'Velocity_Score_Component',
-    'Time_Score_Component',
+    'Severity_Score_Component',
+    'Severity_Level',
+    'Urgency_Score_Component',
+    'Urgency_Level',
+    'LEO_Shell_Band',
+    'TCA_Altitude_km',
+    'LEO_Context_Score_Component',
     'Primary_ECI_X_km',
     'Primary_ECI_Y_km',
     'Primary_ECI_Z_km',
@@ -64,6 +69,7 @@ export function exportConjunctionsToCSV(
     const relSpeedKmh = relVel * 3600;
     const relSpeedMach = relSpeedKmh / 1234.8;
     const riskScore = c.riskScore ?? 0;
+    const b = c.breakdown;
 
     return [
       escapeCsvValue(c.id),
@@ -83,9 +89,14 @@ export function exportConjunctionsToCSV(
       escapeCsvValue(relVel.toFixed(3)),
       escapeCsvValue(relSpeedKmh.toFixed(1)),
       escapeCsvValue(relSpeedMach.toFixed(2)),
-      escapeCsvValue(c.breakdown?.distanceScore?.toFixed(2) ?? 'N/A'),
-      escapeCsvValue(c.breakdown?.velocityScore?.toFixed(2) ?? 'N/A'),
-      escapeCsvValue(c.breakdown?.timeScore?.toFixed(2) ?? 'N/A'),
+      escapeCsvValue(b?.distanceScore?.toFixed(2) ?? 'N/A'),
+      escapeCsvValue((b?.severityScore ?? b?.velocityScore)?.toFixed(2) ?? 'N/A'),
+      escapeCsvValue(b?.severityLevel ?? 'N/A'),
+      escapeCsvValue((b?.urgencyScore ?? b?.timeScore)?.toFixed(2) ?? 'N/A'),
+      escapeCsvValue(b?.urgencyLevel ?? 'N/A'),
+      escapeCsvValue(b?.leoBand ?? 'CORE_CONSTELLATION_LEO'),
+      escapeCsvValue(b?.tcaAltitudeKm?.toFixed(1) ?? 'N/A'),
+      escapeCsvValue(b?.leoContextScore?.toFixed(2) ?? 'N/A'),
       escapeCsvValue(c.positionAAtTca?.x?.toFixed(4) ?? 'N/A'),
       escapeCsvValue(c.positionAAtTca?.y?.toFixed(4) ?? 'N/A'),
       escapeCsvValue(c.positionAAtTca?.z?.toFixed(4) ?? 'N/A'),
@@ -96,6 +107,7 @@ export function exportConjunctionsToCSV(
       escapeCsvValue(c.isSimulatedHazard ? 'TRUE' : 'FALSE')
     ].join(',');
   });
+
 
   const csvContent = [headers.join(','), ...rows].join('\r\n');
 

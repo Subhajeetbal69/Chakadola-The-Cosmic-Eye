@@ -1,0 +1,10 @@
+{
+  "description": "Delivers clean, professional alert pages with minimal, well-paced information and aesthetic design to enhance user engagement and readability.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

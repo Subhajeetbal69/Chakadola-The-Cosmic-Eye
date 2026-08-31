@@ -1,7 +1,8 @@
-import { TleRecord, ObjectClassification } from './types';
+import { TleRecord, ObjectClassification, OrbitClass } from './types';
 
 const EARTH_RADIUS_KM = 6378.137;
 const MU_EARTH = 398600.4418; // km^3 / s^2
+export const LEO_MAX_ALTITUDE_KM = 2000;
 
 /**
  * Validates standard TLE line checksum (modulo 10 sum of digits with '-' counted as 1)
@@ -19,6 +20,44 @@ export function validateChecksum(line: string): boolean {
   }
   const expected = parseInt(line[68], 10);
   return (sum % 10) === expected;
+}
+
+/**
+ * Classifies an orbit regime based on perigee, apogee, and eccentricity
+ */
+export function classifyOrbit(
+  perigeeKm: number,
+  apogeeKm: number,
+  eccentricity: number = 0,
+  maxAltitudeKm: number = LEO_MAX_ALTITUDE_KM
+): OrbitClass {
+  // 1. Defensive LEO definition: both perigee and apogee reside within the LEO shell (<= 2000 km)
+  if (perigeeKm <= maxAltitudeKm && apogeeKm <= maxAltitudeKm) {
+    return 'LEO';
+  }
+
+  // 2. High Eccentricity Orbits (Molniya, GTO, Tundra)
+  if (eccentricity >= 0.25 && apogeeKm > maxAltitudeKm) {
+    return 'HEO';
+  }
+
+  // 3. Geostationary / Geosynchronous Orbits (~35,786 km altitude, circular/low eccentricity)
+  if (
+    perigeeKm >= 34000 &&
+    perigeeKm <= 37500 &&
+    apogeeKm >= 34000 &&
+    apogeeKm <= 37500 &&
+    eccentricity < 0.1
+  ) {
+    return 'GEO';
+  }
+
+  // 4. Medium Earth Orbit (GPS, Galileo, Glonass: 2,000 km to ~35,786 km)
+  if (perigeeKm > maxAltitudeKm && perigeeKm <= 36000 && apogeeKm <= 38000) {
+    return 'MEO';
+  }
+
+  return 'OTHER';
 }
 
 /**
@@ -81,16 +120,32 @@ export function classifyObject(name: string, line1: string = ''): ObjectClassifi
   return 'ACTIVE_SATELLITE';
 }
 
+export interface ParseTleMetrics {
+  totalLines: number;
+  validRecords: number;
+  invalidChecksums: number;
+  leoRecords: number;
+  nonLeoRecords: number;
+  duplicateNorad: number;
+}
+
 /**
- * Parses raw 2-line or 3-line TLE text blocks into structured TleRecords
+ * Parses raw 2-line or 3-line TLE text blocks with detailed diagnostic metrics
  */
-export function parseTleRawText(rawText: string, source: 'CELESTRAK' | 'SAMPLE_DATASET' | 'DEMO_CONJUNCTION' = 'SAMPLE_DATASET'): TleRecord[] {
+export function parseTleWithMetrics(
+  rawText: string,
+  source: 'CELESTRAK' | 'SAMPLE_DATASET' | 'DEMO_CONJUNCTION' | 'LOCAL_SNAPSHOT' = 'SAMPLE_DATASET',
+  filterLeo: boolean = true
+): { records: TleRecord[]; metrics: ParseTleMetrics } {
   const lines = rawText
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0 && !l.startsWith('#'));
 
   const records: TleRecord[] = [];
+  let invalidChecksums = 0;
+  let nonLeoRecords = 0;
+  let leoRecords = 0;
   let i = 0;
 
   while (i < lines.length) {
@@ -122,6 +177,15 @@ export function parseTleRawText(rawText: string, source: 'CELESTRAK' | 'SAMPLE_D
       continue;
     }
 
+    // Verify Checksums
+    const line1Valid = validateChecksum(line1);
+    const line2Valid = validateChecksum(line2);
+    if (!line1Valid || !line2Valid) {
+      invalidChecksums++;
+      // Log and skip if checksum invalid
+      continue;
+    }
+
     try {
       const noradId = line1.substring(2, 7).trim();
       const epochYearStr = line1.substring(18, 20).trim();
@@ -146,8 +210,19 @@ export function parseTleRawText(rawText: string, source: 'CELESTRAK' | 'SAMPLE_D
       const perigeeKm = Math.max(0, semiMajorAxisKm * (1 - ecc) - EARTH_RADIUS_KM);
       const apogeeKm = Math.max(0, semiMajorAxisKm * (1 + ecc) - EARTH_RADIUS_KM);
 
-      const classification = classifyObject(name, line1);
+      const orbitClass = classifyOrbit(perigeeKm, apogeeKm, ecc);
 
+      if (orbitClass === 'LEO') {
+        leoRecords++;
+      } else {
+        nonLeoRecords++;
+        if (filterLeo) {
+          // Skip non-LEO objects when filtering is active
+          continue;
+        }
+      }
+
+      const classification = classifyObject(name, line1);
       const noradIdNum = parseInt(noradId, 10);
 
       records.push({
@@ -157,6 +232,7 @@ export function parseTleRawText(rawText: string, source: 'CELESTRAK' | 'SAMPLE_D
         line1,
         line2,
         classification,
+        orbitClass,
         source,
         epochYear,
         epochDay,
@@ -180,12 +256,38 @@ export function parseTleRawText(rawText: string, source: 'CELESTRAK' | 'SAMPLE_D
   // Deduplicate by NORAD ID
   const seen = new Set<string>();
   const uniqueRecords: TleRecord[] = [];
+  let duplicateNorad = 0;
+
   for (const r of records) {
     if (!seen.has(r.id)) {
       seen.add(r.id);
       uniqueRecords.push(r);
+    } else {
+      duplicateNorad++;
     }
   }
 
-  return uniqueRecords;
+  return {
+    records: uniqueRecords,
+    metrics: {
+      totalLines: lines.length,
+      validRecords: uniqueRecords.length,
+      invalidChecksums,
+      leoRecords,
+      nonLeoRecords,
+      duplicateNorad
+    }
+  };
 }
+
+/**
+ * Parses raw 2-line or 3-line TLE text blocks into structured TleRecords
+ */
+export function parseTleRawText(
+  rawText: string,
+  source: 'CELESTRAK' | 'SAMPLE_DATASET' | 'DEMO_CONJUNCTION' | 'LOCAL_SNAPSHOT' = 'SAMPLE_DATASET',
+  filterLeo: boolean = true
+): TleRecord[] {
+  return parseTleWithMetrics(rawText, source, filterLeo).records;
+}
+

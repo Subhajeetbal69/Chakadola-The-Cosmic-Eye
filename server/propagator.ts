@@ -48,7 +48,7 @@ function solveKepler(M: number, e: number): number {
  * Robust analytical two-body Keplerian propagator fallback.
  * Guarantees TEME / ECI position and velocity vectors even if SGP4 encounters drag errors or epoch drift.
  */
-export function propagateKeplerian(record: TleRecord, date: Date): TrajectoryPoint {
+export function propagateKeplerian(record: TleRecord, date: Date, gmst?: number, skipGeodetic = false): TrajectoryPoint {
   const incRad = (record.inclinationDeg * Math.PI) / 180;
   const raanRad = (record.raanDeg * Math.PI) / 180;
   const argPerRad = (record.argPerigeeDeg * Math.PI) / 180;
@@ -118,31 +118,35 @@ export function propagateKeplerian(record: TleRecord, date: Date): TrajectoryPoi
   const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
   const alt = Math.max(120, r - EARTH_RADIUS_KM);
 
-  // Sub-satellite latitude & longitude
-  const gmst = satellite.gstime(date);
-  const lat = (Math.asin(Math.max(-1, Math.min(1, z / r))) * 180) / Math.PI;
-  let lng = (Math.atan2(y, x) - gmst) % (2 * Math.PI);
-  if (lng > Math.PI) lng -= 2 * Math.PI;
-  if (lng < -Math.PI) lng += 2 * Math.PI;
-  const lngDeg = (lng * 180) / Math.PI;
+  let lat = 0;
+  let lngDeg = 0;
+
+  if (!skipGeodetic) {
+    const actualGmst = gmst !== undefined ? gmst : satellite.gstime(date);
+    lat = (Math.asin(Math.max(-1, Math.min(1, z / r))) * 180) / Math.PI;
+    let lng = (Math.atan2(y, x) - actualGmst) % (2 * Math.PI);
+    if (lng > Math.PI) lng -= 2 * Math.PI;
+    if (lng < -Math.PI) lng += 2 * Math.PI;
+    lngDeg = (lng * 180) / Math.PI;
+  }
 
   return {
     timeIso: date.toISOString(),
     timestamp: date.getTime(),
     position: {
-      x: Number(x.toFixed(3)),
-      y: Number(y.toFixed(3)),
-      z: Number(z.toFixed(3))
+      x: Math.round(x * 1000) / 1000,
+      y: Math.round(y * 1000) / 1000,
+      z: Math.round(z * 1000) / 1000
     },
     velocity: {
-      x: Number(vx.toFixed(4)),
-      y: Number(vy.toFixed(4)),
-      z: Number(vz.toFixed(4))
+      x: Math.round(vx * 10000) / 10000,
+      y: Math.round(vy * 10000) / 10000,
+      z: Math.round(vz * 10000) / 10000
     },
-    speed: Number(speed.toFixed(3)),
-    lat: Number(lat.toFixed(3)),
-    lng: Number(lngDeg.toFixed(3)),
-    alt: Number(alt.toFixed(2))
+    speed: Math.round(speed * 1000) / 1000,
+    lat: Math.round(lat * 1000) / 1000,
+    lng: Math.round(lngDeg * 1000) / 1000,
+    alt: Math.round(alt * 100) / 100
   };
 }
 
@@ -150,7 +154,7 @@ export function propagateKeplerian(record: TleRecord, date: Date): TrajectoryPoi
  * Propagate single satrec at given Date.
  * Falls back seamlessly to Keplerian analytical solver if SGP4 produces NaN or error.
  */
-export function propagateAtTime(wrapper: SatrecWrapper, date: Date): TrajectoryPoint {
+export function propagateAtTime(wrapper: SatrecWrapper, date: Date, gmst?: number, skipGeodetic = false): TrajectoryPoint {
   if (wrapper.satrec && wrapper.satrec.error === 0) {
     try {
       const positionAndVelocity = satellite.propagate(wrapper.satrec, date);
@@ -167,17 +171,22 @@ export function propagateAtTime(wrapper: SatrecWrapper, date: Date): TrajectoryP
         Number.isFinite(velocity.z) &&
         position.x !== 0 && position.y !== 0 && position.z !== 0
       ) {
-        const gmst = satellite.gstime(date);
-        let lat = null;
-        let lng = null;
-        let alt = null;
+        let lat = 0;
+        let lng = 0;
+        let alt = 0;
 
-        try {
-          const geodetic = satellite.eciToGeodetic(position, gmst);
-          lat = satellite.radiansToDegrees(geodetic.latitude);
-          lng = satellite.radiansToDegrees(geodetic.longitude);
-          alt = geodetic.height;
-        } catch {
+        if (!skipGeodetic) {
+          const actualGmst = gmst !== undefined ? gmst : satellite.gstime(date);
+          try {
+            const geodetic = satellite.eciToGeodetic(position, actualGmst);
+            lat = satellite.radiansToDegrees(geodetic.latitude);
+            lng = satellite.radiansToDegrees(geodetic.longitude);
+            alt = geodetic.height;
+          } catch {
+            const r = Math.sqrt(position.x * position.x + position.y * position.y + position.z * position.z);
+            alt = Math.max(0, r - EARTH_RADIUS_KM);
+          }
+        } else {
           const r = Math.sqrt(position.x * position.x + position.y * position.y + position.z * position.z);
           alt = Math.max(0, r - EARTH_RADIUS_KM);
         }
@@ -191,19 +200,19 @@ export function propagateAtTime(wrapper: SatrecWrapper, date: Date): TrajectoryP
           timeIso: date.toISOString(),
           timestamp: date.getTime(),
           position: {
-            x: Number(position.x.toFixed(3)),
-            y: Number(position.y.toFixed(3)),
-            z: Number(position.z.toFixed(3))
+            x: Math.round(position.x * 1000) / 1000,
+            y: Math.round(position.y * 1000) / 1000,
+            z: Math.round(position.z * 1000) / 1000
           },
           velocity: {
-            x: Number(vx.toFixed(4)),
-            y: Number(vy.toFixed(4)),
-            z: Number(vz.toFixed(4))
+            x: Math.round(vx * 10000) / 10000,
+            y: Math.round(vy * 10000) / 10000,
+            z: Math.round(vz * 10000) / 10000
           },
-          speed: Number(speed.toFixed(3)),
-          lat: Number(lat.toFixed(3)),
-          lng: Number(lng.toFixed(3)),
-          alt: Number(alt.toFixed(2))
+          speed: Math.round(speed * 1000) / 1000,
+          lat: Math.round(lat * 1000) / 1000,
+          lng: Math.round(lng * 1000) / 1000,
+          alt: Math.round(alt * 100) / 100
         };
       }
     } catch (err) {
@@ -212,7 +221,7 @@ export function propagateAtTime(wrapper: SatrecWrapper, date: Date): TrajectoryP
   }
 
   // Guaranteed analytical Keplerian fallback
-  return propagateKeplerian(wrapper.record, date);
+  return propagateKeplerian(wrapper.record, date, gmst, skipGeodetic);
 }
 
 /**
@@ -246,10 +255,12 @@ const orbitSampleCache = new Map<string, { updatedAt: string; timestamp: number;
 export function getObjectSummary(
   wrapper: SatrecWrapper,
   date: Date = new Date(),
-  skipOrbitSample = false
+  skipOrbitSample = false,
+  gmst?: number,
+  skipGeodetic = false
 ): TrackedObjectSummary {
   const r = wrapper.record;
-  const current = propagateAtTime(wrapper, date);
+  const current = propagateAtTime(wrapper, date, gmst, skipGeodetic);
 
   // Generate 48 samples around 1 orbital period to render high-fidelity 3D and 2D orbit tracks
   const orbitSample: Vector3D[] = [];
@@ -271,7 +282,8 @@ export function getObjectSummary(
       const sampleDate = new Date();
       for (let i = 0; i < 48; i++) {
         sampleDate.setTime(startMs + i * stepSeconds * 1000);
-        const pt = propagateAtTime(wrapper, sampleDate);
+        // Bypassing geodetic calculations entirely for orbit path points since only position is needed
+        const pt = propagateAtTime(wrapper, sampleDate, undefined, true);
         if (pt && pt.position) {
           orbitSample.push(pt.position);
         }
@@ -290,6 +302,7 @@ export function getObjectSummary(
     id: r.id,
     name: r.name,
     classification: r.classification,
+    orbitClass: r.orbitClass || 'LEO',
     source: r.source,
     noradId: r.id,
     inclinationDeg: r.inclinationDeg,

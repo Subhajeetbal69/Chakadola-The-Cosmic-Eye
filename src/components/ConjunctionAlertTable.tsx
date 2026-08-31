@@ -379,7 +379,7 @@ const ConjunctionRow = React.memo<{
                     {riskScore.toFixed(1)} <span className="text-xs font-normal text-slate-400">/ 100</span>
                   </div>
                   <div className="text-[10px] text-slate-400 mt-0.5">
-                    Dist: {c.breakdown?.distanceScore?.toFixed(0) ?? 'N/A'}pt | Vel: {c.breakdown?.velocityScore?.toFixed(0) ?? 'N/A'}pt | Time: {c.breakdown?.timeScore?.toFixed(0) ?? 'N/A'}pt
+                    Dist: {c.breakdown?.distanceScore?.toFixed(0) ?? 'N/A'}pt | Sev: {(c.breakdown?.severityScore ?? c.breakdown?.velocityScore)?.toFixed(0) ?? 'N/A'}pt | Urg: {(c.breakdown?.urgencyScore ?? c.breakdown?.timeScore)?.toFixed(0) ?? 'N/A'}pt | LEO: {c.breakdown?.leoContextScore?.toFixed(0) ?? 'N/A'}pt
                   </div>
                 </div>
               </div>
