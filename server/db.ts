@@ -314,8 +314,8 @@ export async function saveNewSnapshot(
         ]
       );
 
-      // 3. Batch insert TLE records
-      const BATCH_SIZE = 500;
+      // 3. Batch insert TLE records (200 records * 19 columns = 3,800 params, well within limits)
+      const BATCH_SIZE = 200;
       for (let i = 0; i < records.length; i += BATCH_SIZE) {
         const batch = records.slice(i, i + BATCH_SIZE);
         const valueStrings: string[] = [];

@@ -333,9 +333,9 @@ async function startServer() {
   const server = http.createServer(app);
 
   // ── 3. Slowloris & Request Timeout Hardening ──────────────────────
-  server.headersTimeout = 15000;  // 15 seconds max to receive complete HTTP headers
-  server.requestTimeout = 30000;  // 30 seconds max for entire HTTP request processing
-  server.keepAliveTimeout = 10000; // 10 seconds idle keep-alive timeout
+  server.headersTimeout = 60000;   // 60s max to receive HTTP headers
+  server.requestTimeout = 120000;  // 120s max for entire request (accommodates multi-tier live TLE fetch & DB sync)
+  server.keepAliveTimeout = 30000; // 30s idle keep-alive timeout
 
   server.on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {

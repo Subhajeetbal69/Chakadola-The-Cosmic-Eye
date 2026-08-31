@@ -352,8 +352,8 @@ async function fetchFromCelestrakPolitely(): Promise<{ success: boolean; rawData
  */
 async function fetchFromSecondaryMirror(): Promise<{ success: boolean; rawData: string; error?: string }> {
   try {
-    const BATCH_SIZE = 4;
-    const PACING_DELAY_MS = 250;
+    const BATCH_SIZE = 8;
+    const PACING_DELAY_MS = 150;
     const uniqueObjectsMap = new Map<string, { name: string; line1: string; line2: string }>();
 
     const totalTargets = SECONDARY_TLE_MIRROR_TARGETS.length;
@@ -361,7 +361,7 @@ async function fetchFromSecondaryMirror(): Promise<{ success: boolean; rawData: 
 
     for (let i = 0; i < totalTargets; i += BATCH_SIZE) {
       const batchUrls = SECONDARY_TLE_MIRROR_TARGETS.slice(i, i + BATCH_SIZE);
-      const batchPromises = batchUrls.map((url) => fetchWithDiagnostics(url, 8000));
+      const batchPromises = batchUrls.map((url) => fetchWithDiagnostics(url, 5000));
       const batchResults = await Promise.allSettled(batchPromises);
 
       for (const res of batchResults) {
