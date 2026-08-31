@@ -1,7 +1,7 @@
 import { gemini } from "./gemini.ts";
 import { Type } from "@google/genai";
-import { ConjunctionEvent, TleRecord } from "../types.ts";
-import { getDistanceHistory, simulateManeuver } from "../conjunctionEngine.ts";
+import { ConjunctionEvent, TleRecord } from "../src/types";
+import { getDistanceHistory, simulateManeuver } from "../server/conjunctionEngine";
 
 // Define the response schema using Gemini API OpenAPI subset format
 const responseSchema = {
@@ -269,7 +269,17 @@ Please assess this conjunction. Ensure you utilize the tools to get historical t
         finished = true;
         if (result.text) {
           try {
-            return JSON.parse(result.text.trim());
+            const parsed = JSON.parse(result.text.trim());
+            return {
+              ...parsed,
+              _meta: {
+                model: "gemini-3.5-flash-lite",
+                generatedAt: new Date().toISOString(),
+                toolIterations: iterations,
+                usage: result.usageMetadata || null,
+                isLiveApiCall: true
+              }
+            };
           } catch (parseErr) {
             console.error("[Gemini Parser Error] Failed parsing JSON output:", result.text, parseErr);
             return fallbackResponse;

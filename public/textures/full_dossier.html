@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Full Dossier — Asteria Mission Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Spectral:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Design tokens ─────────────────────────────────────────────── */
+    :root {
+      --bg:        #071019;
+      --panel:     #0b1520;
+      --panel-2:   #0d1c2a;
+      --surface:   #0e2030;
+      --surface-2: #091523;
+      --line:      rgba(201,217,138,.10);
+      --line-soft: rgba(201,217,138,.055);
+      --line-dim:  rgba(255,255,255,.05);
+
+      --text:      #edf2ec;
+      --muted:     #8ca49a;
+      --dim:       #5a6e65;
+
+      /* primary accent — safety-lime */
+      --lime:      #c9d98a;
+      --lime-glow: rgba(201,217,138,.16);
+      --lime-mid:  rgba(201,217,138,.24);
+      --lime-hi:   rgba(201,217,138,.55);
+
+      --green:     #7fcf8a;
+      --amber:     #f5a524;
+      --orange:    #f0932b;
+      --red:       #f0506a;
+      --blue:      #5c9bff;
+
+      --mono:  "DM Mono", ui-monospace, monospace;
+      --sans:  Manrope, Arial, sans-serif;
+      --serif: Spectral, Georgia, serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px 16px;
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(circle at 75% 18%, rgba(94,129,91,.16), transparent 34%),
+        radial-gradient(circle at 12% 88%, rgba(201,217,138,.07), transparent 32%),
+        radial-gradient(circle at 50% 55%, rgba(94,129,91,.05), transparent 50%),
+        linear-gradient(118deg, #071019 0%, #071019 55%, #0d1920 100%);
+    }
+
+    /* ── Dossier shell ─────────────────────────────────────────────── */
+    .dossier {
+      width: 100%;
+      max-width: 880px;
+      border-radius: 22px;
+      border: 1px solid rgba(201,217,138,.14);
+      background: linear-gradient(175deg, rgba(13,28,40,.97) 0%, rgba(9,18,27,.99) 100%);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,.018) inset,
+        0 40px 90px -30px rgba(0,0,0,.8),
+        0 0 60px -20px rgba(94,129,91,.08);
+      overflow: hidden;
+    }
+
+    /* ── Header ────────────────────────────────────────────────────── */
+    .head {
+      display: flex;
+      align-items: flex-start;
+      gap: 18px;
+      padding: 22px 26px 20px;
+      background: linear-gradient(180deg, rgba(201,217,138,.04) 0%, transparent 100%);
+      border-bottom: 1px solid var(--line-soft);
+      position: relative;
+    }
+
+    .sigil {
+      flex-shrink: 0;
+      width: 62px; height: 62px;
+      display: grid; place-items: center;
+      border-radius: 16px;
+      color: var(--lime);
+      background: radial-gradient(circle at 40% 28%, rgba(201,217,138,.20), rgba(201,217,138,.04));
+      border: 1px solid rgba(201,217,138,.30);
+      box-shadow: 0 0 28px -4px rgba(201,217,138,.40), inset 0 0 18px rgba(201,217,138,.10);
+    }
+    .sigil svg { width: 30px; height: 30px; }
+
+    .head-main { flex: 1; min-width: 0; }
+    .tag-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
+
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--mono);
+      font-size: 10.5px; font-weight: 500;
+      letter-spacing: .14em; text-transform: uppercase;
+      padding: 4px 10px; border-radius: 7px; line-height: 1;
+    }
+    .chip.status {
+      color: var(--lime);
+      border: 1px solid rgba(201,217,138,.38);
+      background: rgba(201,217,138,.07);
+    }
+    .chip.norad { color: var(--muted); letter-spacing: .10em; }
+    .chip.hazard {
+      color: #ffe8ee;
+      background: linear-gradient(170deg, #f0506a 0%, #c92d4a 100%);
+      box-shadow: 0 6px 20px -6px rgba(240,80,106,.65);
+    }
+    .chip.hazard svg { width: 11px; height: 11px; }
+
+    .title {
+      font-family: var(--serif);
+      font-weight: 700;
+      font-size: clamp(22px, 4vw, 30px);
+      letter-spacing: .015em;
+      line-height: 1.05;
+      margin: 0;
+    }
+
+    .close {
+      position: absolute; top: 18px; right: 20px;
+      width: 34px; height: 34px; border-radius: 9px;
+      display: grid; place-items: center;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--muted); cursor: pointer; transition: .18s;
+    }
+    .close:hover {
+      color: var(--text);
+      background: rgba(201,217,138,.06);
+      border-color: rgba(201,217,138,.18);
+    }
+    .close svg { width: 18px; height: 18px; }
+
+    /* ── Tab bar ────────────────────────────────────────────────────── */
+    .tabs {
+      display: flex; flex-wrap: wrap; gap: 4px;
+      padding: 10px 18px;
+      border-bottom: 1px solid var(--line-soft);
+      background: rgba(4,10,16,.45);
+    }
+    .tab {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 9px 14px; border-radius: 10px;
+      border: 1px solid transparent; background: transparent;
+      font-family: var(--sans); font-weight: 600; font-size: 13.5px;
+      color: var(--muted); cursor: pointer; white-space: nowrap;
+      letter-spacing: .005em;
+      transition: color .18s, background .18s, border-color .18s, box-shadow .25s;
+    }
+    .tab svg { width: 14px; height: 14px; flex-shrink: 0; opacity: .8; transition: opacity .18s; }
+    .tab:hover { color: var(--text); }
+    .tab:hover svg { opacity: 1; }
+
+    /* Lime active tab */
+    .tab[data-accent="lime"].active {
+      color: #1a2606;
+      background: linear-gradient(170deg, #d9ed98, #b8cd60);
+      border-color: rgba(201,217,138,.0);
+      box-shadow: 0 6px 20px -6px rgba(184,205,96,.55), 0 0 0 1px rgba(255,255,255,.08) inset;
+    }
+    .tab[data-accent="lime"].active svg { opacity: 1; color: #1a2606; }
+
+    /* Orange active tab (burn planner) */
+    .tab[data-accent="orange"].active {
+      color: #1c0900;
+      background: linear-gradient(170deg, #f7b240, #ef8b1f);
+      border-color: transparent;
+      box-shadow: 0 6px 20px -6px rgba(240,147,43,.7), 0 0 0 1px rgba(255,255,255,.08) inset;
+    }
+    .tab[data-accent="orange"].active svg { opacity: 1; color: #1c0900; }
+
+    /* ── Body ──────────────────────────────────────────────────────── */
+    .body { padding: 20px 22px; min-height: 300px; }
+    .panel { display: none; animation: fade .28s ease; }
+    .panel.active { display: block; }
+    @keyframes fade { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+    .card {
+      border: 1px solid var(--line-dim);
+      background: linear-gradient(180deg, rgba(255,255,255,.022), rgba(255,255,255,.005));
+      border-radius: 16px;
+    }
+    .card-lime {
+      border: 1px solid rgba(201,217,138,.12);
+      background: linear-gradient(165deg, rgba(201,217,138,.04), rgba(201,217,138,.008));
+      border-radius: 16px;
+    }
+
+    .sec-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      margin-bottom: 16px;
+    }
+    .sec-title {
+      display: inline-flex; align-items: center; gap: 9px;
+      font-family: var(--mono); font-size: 11.5px; font-weight: 500;
+      letter-spacing: .15em; text-transform: uppercase; color: var(--text);
+    }
+    .sec-title svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+    /* pills */
+    .pill {
+      font-family: var(--mono); font-size: 10px; font-weight: 500;
+      letter-spacing: .14em; text-transform: uppercase;
+      padding: 4px 10px; border-radius: 6px; line-height: 1;
+    }
+    .pill.lime { color: var(--lime); border: 1px solid rgba(201,217,138,.35); background: rgba(201,217,138,.07); }
+    .pill.crit { color: #fff; background: linear-gradient(170deg,#f0506a,#c92d4a); box-shadow: 0 4px 14px -4px rgba(240,80,106,.6); }
+
+    /* ── Stat grid ─────────────────────────────────────────────────── */
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .stat {
+      border: 1px solid var(--line-dim);
+      border-radius: 13px;
+      background: rgba(5,12,20,.55);
+      padding: 14px 15px;
+    }
+    .stat .k {
+      font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--dim); margin-bottom: 10px;
+    }
+    .stat .v { font-family: var(--mono); font-size: 21px; font-weight: 500; line-height: 1; }
+    .stat .u { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: 4px; }
+
+    .v.lime   { color: var(--lime); }
+    .v.amber  { color: var(--amber); }
+    .v.red    { color: var(--red); }
+    .v.blue   { color: var(--blue); }
+    .v.green  { color: var(--green); }
+    .v.white  { color: var(--text); }
+    .v.orange { color: var(--orange); }
+
+    .impact {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      margin-top: 12px; padding: 12px 15px;
+      border-radius: 11px; border: 1px solid var(--line-dim);
+      background: rgba(5,12,20,.4);
+      font-family: var(--mono); font-size: 12.5px;
+    }
+    .impact .lbl { color: var(--muted); }
+    .impact .val { color: var(--red); font-weight: 500; }
+
+    .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    .duo .card, .duo .card-lime { padding: 15px 17px; }
+    .kv {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 0; font-family: var(--mono); font-size: 13px;
+    }
+    .kv + .kv { border-top: 1px solid var(--line-dim); }
+    .kv .lbl { color: var(--muted); }
+
+    /* ── Keplerian panel ───────────────────────────────────────────── */
+    .kep-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .kep {
+      border: 1px solid var(--line-dim); border-radius: 13px;
+      background: rgba(5,12,20,.55); padding: 15px 17px;
+    }
+    .kep .k {
+      font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--dim); margin-bottom: 10px;
+    }
+    .kep .v { font-family: var(--mono); font-size: 20px; font-weight: 500; }
+    .foot-line {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      margin-top: 14px; padding-top: 13px; border-top: 1px solid var(--line-dim);
+      font-family: var(--mono); font-size: 13px;
+    }
+    .foot-line .lbl { color: var(--muted); }
+
+    /* ── Safety panel ──────────────────────────────────────────────── */
+    .hazard-card {
+      border: 1px solid rgba(240,80,106,.36);
+      background:
+        radial-gradient(130% 100% at 0% 0%, rgba(240,80,106,.10), transparent 55%),
+        linear-gradient(175deg, rgba(28,8,14,.65), rgba(14,5,10,.55));
+      border-radius: 16px; padding: 20px 22px;
+      box-shadow: 0 0 50px -20px rgba(240,80,106,.5) inset;
+    }
+    .hazard-card .sec-title { color: #ffc4d0; }
+    .hazard-card .sec-title svg { color: var(--red); }
+    .terminal {
+      margin-top: 16px; border-radius: 12px;
+      border: 1px solid rgba(240,80,106,.15);
+      background: rgba(3,6,10,.68); padding: 18px 20px;
+      font-family: var(--mono); font-size: 13.5px; line-height: 2.05;
+    }
+    .terminal .lbl { color: var(--muted); }
+    .terminal b { color: var(--text); font-weight: 500; }
+    .terminal .danger { color: var(--red); }
+    .terminal .warn { color: var(--amber); }
+
+    /* ── Burn planner panel ─────────────────────────────────────────── */
+    .seg {
+      display: inline-flex; padding: 3px; gap: 3px;
+      border-radius: 10px; border: 1px solid var(--line-dim);
+      background: rgba(5,12,20,.65);
+    }
+    .seg button {
+      font-family: var(--mono); font-size: 11px; letter-spacing: .06em;
+      padding: 7px 13px; border-radius: 7px; border: none; cursor: pointer;
+      background: transparent; color: var(--muted); transition: .18s;
+    }
+    .seg button.on {
+      background: linear-gradient(170deg, #f7b240, #ef8b1f);
+      color: #1c0900; font-weight: 500;
+      box-shadow: 0 4px 12px -4px rgba(240,147,43,.5);
+    }
+
+    .slider-wrap { margin: 20px 2px 4px; }
+    .slider-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+    .slider-top .lbl { color: var(--muted); font-family: var(--mono); font-size: 13px; }
+    .slider-top .amt { font-family: var(--mono); font-size: 18px; font-weight: 500; color: var(--orange); }
+    .slider-top .amt small { color: var(--muted); font-size: 12px; margin-left: 3px; }
+
+    input[type=range] {
+      -webkit-appearance: none; appearance: none;
+      width: 100%; height: 5px; border-radius: 99px; outline: none; cursor: pointer;
+      background: linear-gradient(90deg, var(--orange) var(--fill, 20%), rgba(255,255,255,.09) var(--fill, 20%));
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #fff; border: 3px solid var(--orange);
+      box-shadow: 0 0 14px -2px rgba(240,147,43,.8);
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 18px; height: 18px; border-radius: 50%;
+      background: #fff; border: 3px solid var(--orange);
+      box-shadow: 0 0 14px -2px rgba(240,147,43,.8);
+    }
+
+    /* ── Footer ─────────────────────────────────────────────────────── */
+    .foot {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 15px 20px;
+      border-top: 1px solid var(--line-soft);
+      background: rgba(4,10,16,.45);
+    }
+    .foot-right { display: flex; gap: 9px; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--mono); font-size: 12px; letter-spacing: .04em;
+      padding: 10px 15px; border-radius: 11px; cursor: pointer;
+      border: 1px solid var(--line-dim);
+      background: rgba(255,255,255,.03); color: var(--text);
+      transition: .18s;
+    }
+    .btn svg { width: 14px; height: 14px; }
+    .btn:hover { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.14); }
+
+    .btn.lime-outline {
+      color: var(--lime);
+      border-color: rgba(201,217,138,.30);
+      background: rgba(201,217,138,.05);
+    }
+    .btn.lime-outline:hover {
+      background: rgba(201,217,138,.12);
+      border-color: rgba(201,217,138,.45);
+    }
+
+    .btn.primary {
+      color: #0f1a06;
+      border: none;
+      background: linear-gradient(170deg, #d9ed98, #b2c85a);
+      box-shadow: 0 8px 24px -8px rgba(180,210,80,.6);
+      font-weight: 600;
+    }
+    .btn.primary:hover { filter: brightness(1.07); }
+    .btn.primary svg { color: #0f1a06; }
+
+    /* ── Responsive ─────────────────────────────────────────────────── */
+    @media (max-width: 720px) {
+      .stat-grid { grid-template-columns: repeat(2, 1fr); }
+      .kep-grid, .duo { grid-template-columns: 1fr 1fr; }
+      .foot { flex-direction: column; align-items: stretch; }
+      .foot-right { justify-content: flex-end; }
+    }
+    @media (max-width: 460px) {
+      .stat-grid, .kep-grid, .duo { grid-template-columns: 1fr; }
+      .tab { font-size: 12.5px; padding: 8px 10px; }
+      .title { font-size: 22px; }
+    }
+
+    /* hide scrollbars */
+    ::-webkit-scrollbar { width: 0; }
+  </style>
+</head>
+<body>
+
+  <section class="dossier" role="dialog" aria-label="Object dossier">
+
+    <!-- ── Header ── -->
+    <header class="head">
+      <div class="sigil" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/>
+          <path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4"/>
+          <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/>
+        </svg>
+      </div>
+      <div class="head-main">
+        <div class="tag-row">
+          <span class="chip status">Active Satellite</span>
+          <span class="chip norad">NORAD #62910</span>
+          <span class="chip hazard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6l-7-3Z"/><path d="M12 8v4M12 15.5v.5"/></svg>
+            Conjunction Hazard
+          </span>
+        </div>
+        <h1 class="title">STARLINK-11569 [DTC]</h1>
+      </div>
+      <button class="close" aria-label="Close dossier">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </header>
+
+    <!-- ── Tabs ── -->
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-accent="lime" data-tab="overview" role="tab" aria-selected="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 18 0"/><path d="M12 12l4-2.5"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>
+        Overview &amp; Dynamics
+      </button>
+      <button class="tab" data-accent="lime" data-tab="keplerian" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9" ry="4.2"/><ellipse cx="12" cy="12" rx="4.2" ry="9" transform="rotate(60 12 12)"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>
+        Keplerian Ephemeris
+      </button>
+      <button class="tab" data-accent="lime" data-tab="safety" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6l-7-3Z"/><path d="M12 8v4M12 15.5v.5"/></svg>
+        Safety &amp; Hazards
+      </button>
+      <button class="tab" data-accent="orange" data-tab="burn" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1.5 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.4.5-2.4 1.2-3.3.4 1 1 1.6 1.8 1.9-.3-2.3.5-4.9 1-6.6Z"/></svg>
+        Evasive Burn Planner
+      </button>
+    </nav>
+
+    <!-- ── Body ── -->
+    <div class="body">
+
+      <!-- Panel 1 — Overview & Dynamics -->
+      <div class="panel active" data-panel="overview" role="tabpanel">
+        <div class="card-lime" style="padding:18px 20px;">
+          <div class="sec-head">
+            <span class="sec-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--lime)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 12l4-6"/><path d="M3.5 15a9 9 0 0 1 17 0"/><circle cx="12" cy="12" r="1.4" fill="var(--lime)" stroke="none"/></svg>
+              Orbital Kinematics &amp; Energy
+            </span>
+            <span class="pill lime">Hypervelocity</span>
+          </div>
+          <div class="stat-grid">
+            <div class="stat">
+              <div class="k">Velocity</div>
+              <div><span class="v lime">7.70</span><span class="u">km/s</span></div>
+            </div>
+            <div class="stat">
+              <div class="k">Mach Equiv.</div>
+              <div><span class="v amber">Mach&nbsp;22.4</span></div>
+            </div>
+            <div class="stat">
+              <div class="k">Ground Speed</div>
+              <div><span class="v white">27,702</span><span class="u">km/h</span></div>
+            </div>
+            <div class="stat">
+              <div class="k">Kinetic Energy</div>
+              <div><span class="v red">44409.8</span><span class="u">MJ</span></div>
+            </div>
+          </div>
+          <div class="impact">
+            <span class="lbl">Impact Energy Equivalence:</span>
+            <span class="val">~10614.2 kg TNT detonation</span>
+          </div>
+        </div>
+
+        <div class="duo">
+          <div class="card" style="padding:15px 17px;">
+            <div class="sec-title" style="margin-bottom:13px; color:var(--green);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.6 9h16.8M3.6 15h16.8M12 3c-2.5 3.5-2.5 14.5 0 18M12 3c2.5 3.5 2.5 14.5 0 18"/></svg>
+              Geographic Sub-Point
+            </div>
+            <div class="kv"><span class="lbl">Latitude:</span><span class="v green" style="font-size:14px;">-42.82° S</span></div>
+            <div class="kv"><span class="lbl">Longitude:</span><span class="v green" style="font-size:14px;">-24.09° W</span></div>
+          </div>
+          <div class="card" style="padding:15px 17px;">
+            <div class="sec-title" style="margin-bottom:13px; color:var(--lime);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--lime)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><ellipse cx="12" cy="12" rx="10" ry="4.5" transform="rotate(30 12 12)"/></svg>
+              Altitude &amp; Period
+            </div>
+            <div class="kv"><span class="lbl">Altitude:</span><span class="v lime" style="font-size:14px;">355.3 km</span></div>
+            <div class="kv"><span class="lbl">Period:</span><span class="v white" style="font-size:14px;">91.7 min</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 2 — Keplerian Ephemeris -->
+      <div class="panel" data-panel="keplerian" role="tabpanel">
+        <div class="card-lime" style="padding:18px 20px;">
+          <div class="sec-head">
+            <span class="sec-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--lime)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9" ry="4.2"/><ellipse cx="12" cy="12" rx="4.2" ry="9" transform="rotate(60 12 12)"/><circle cx="12" cy="12" r="1.4" fill="var(--lime)" stroke="none"/></svg>
+              6-Parameter Keplerian State Vector
+            </span>
+          </div>
+          <div class="kep-grid">
+            <div class="kep">
+              <div class="k">Semi-Major Axis (a)</div>
+              <div class="v white">6734.6 km</div>
+            </div>
+            <div class="kep">
+              <div class="k">Inclination (i)</div>
+              <div class="v white">43.00°</div>
+            </div>
+            <div class="kep">
+              <div class="k">Perigee (Lowest Point)</div>
+              <div class="v lime">355.3 km</div>
+            </div>
+            <div class="kep">
+              <div class="k">Apogee (Highest Point)</div>
+              <div class="v lime">357.6 km</div>
+            </div>
+          </div>
+          <div class="foot-line">
+            <span class="lbl">Orbital Period:</span>
+            <span class="v white" style="font-size:13.5px;">91.7 minutes (15.71 rev/day)</span>
+          </div>
+          <div class="foot-line" style="border-top:none;padding-top:4px;">
+            <span class="lbl">ECI Coordinates:</span>
+            <span class="v white" style="font-size:13.5px;">X: 2743.5, Y: -4117.7, Z: -4567.0 km</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 3 — Safety & Hazards -->
+      <div class="panel" data-panel="safety" role="tabpanel">
+        <div class="hazard-card">
+          <div class="sec-head" style="margin-bottom:0;">
+            <span class="sec-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6l-7-3Z"/><path d="M12 8v4M12 15.5v.5"/></svg>
+              Conjunction Encounter Detected
+            </span>
+            <span class="pill crit">Critical Risk</span>
+          </div>
+          <div class="terminal">
+            <div><span class="lbl">Target Intersect:</span> <b>STARLINK-11385 [DTC]</b></div>
+            <div><span class="lbl">Minimum Miss Distance:</span> <span class="danger">2.10 km</span></div>
+            <div><span class="lbl">Relative Encounter Velocity:</span> <span class="warn">9.76 km/s</span></div>
+            <div><span class="lbl">TCA Timestamp:</span> <b>8/30/2026, 5:15:08 AM</b></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 4 — Evasive Burn Planner -->
+      <div class="panel" data-panel="burn" role="tabpanel">
+        <div class="card" style="padding:18px 20px;">
+          <div class="sec-head">
+            <span class="sec-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1.5 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.4.5-2.4 1.2-3.3.4 1 1 1.6 1.8 1.9-.3-2.3.5-4.9 1-6.6Z"/></svg>
+              Maneuver Simulation (ΔV Impulse)
+            </span>
+            <div class="seg" id="burnSeg">
+              <button class="on" data-dir="pro">Prograde (+Alt)</button>
+              <button data-dir="retro">Retrograde (−Alt)</button>
+            </div>
+          </div>
+
+          <div class="slider-wrap">
+            <div class="slider-top">
+              <span class="lbl">Delta-V Impulse:</span>
+              <span class="amt"><span id="dvVal">10</span><small>m/s</small></span>
+            </div>
+            <input type="range" id="dv" min="0" max="50" value="10" style="--fill:20%;" />
+          </div>
+
+          <div class="duo" style="margin-top:20px;">
+            <div class="stat"><div class="k">Induced Altitude Shift</div><div><span class="v orange" id="altShift">+17.5</span><span class="u">km</span></div></div>
+            <div class="stat"><div class="k">Est. Fuel Expended</div><div><span class="v white" id="fuel">6.93</span><span class="u">kg</span></div></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Footer ── -->
+    <footer class="foot">
+      <button class="btn" id="copyBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+        Copy Dossier
+      </button>
+      <div class="foot-right">
+        <button class="btn lime-outline">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/><ellipse cx="12" cy="12" rx="4.5" ry="9"/></svg>
+          2D Orbit Plane
+        </button>
+        <button class="btn primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg>
+          Lock in 3D
+        </button>
+      </div>
+    </footer>
+
+  </section>
+
+  <script>
+    /* ── Tab switching ── */
+    const tabs = document.querySelectorAll('.tab');
+    const panels = document.querySelectorAll('.panel');
+    tabs.forEach(tab => tab.addEventListener('click', () => {
+      tabs.forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+      tab.classList.add('active'); tab.setAttribute('aria-selected', 'true');
+      const id = tab.dataset.tab;
+      panels.forEach(p => p.classList.toggle('active', p.dataset.panel === id));
+    }));
+
+    /* ── Burn planner ── */
+    const dv = document.getElementById('dv');
+    const dvVal = document.getElementById('dvVal');
+    const altShift = document.getElementById('altShift');
+    const fuel = document.getElementById('fuel');
+    const seg = document.getElementById('burnSeg');
+    let dir = 1;
+
+    function recompute() {
+      const v = Number(dv.value);
+      dv.style.setProperty('--fill', (v / Number(dv.max) * 100) + '%');
+      dvVal.textContent = v;
+      const shift = v * 1.75 * dir;
+      const kg = (v * 0.693).toFixed(2);
+      altShift.textContent = (shift >= 0 ? '+' : '') + shift.toFixed(1);
+      fuel.textContent = kg;
+    }
+    dv.addEventListener('input', recompute);
+
+    seg.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+      seg.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      dir = b.dataset.dir === 'pro' ? 1 : -1;
+      recompute();
+    }));
+    recompute();
+
+    /* ── Copy dossier ── */
+    const copyBtn = document.getElementById('copyBtn');
+    copyBtn.addEventListener('click', () => {
+      const text = [
+        'STARLINK-11569 [DTC] — NORAD #62910',
+        'Velocity 7.70 km/s · Mach 22.4 · Altitude 355.3 km · Period 91.7 min',
+        'Semi-major axis 6734.6 km · Inclination 43.00° · Perigee 355.3 km · Apogee 357.6 km',
+        'CONJUNCTION: STARLINK-11385 [DTC] · Miss 2.10 km · Rel-V 9.76 km/s · TCA 8/30/2026 5:15:08 AM'
+      ].join('\n');
+      navigator.clipboard?.writeText(text);
+      const lastNode = copyBtn.childNodes[copyBtn.childNodes.length - 1];
+      lastNode.textContent = ' Copied';
+      setTimeout(() => { lastNode.textContent = ' Copy Dossier'; }, 1600);
+    });
+  </script>
+
+</body>
+</html>
