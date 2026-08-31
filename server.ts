@@ -289,7 +289,7 @@ async function initCoreEngine() {
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = parseInt(process.env.PORT || '3000', 10);
 
   // ── 1. HTTP Security Headers & Payload Size Clamping ─────────────
   app.use(
@@ -349,7 +349,7 @@ async function startServer() {
   // ── 4. WebSocket Server & DDoS Shielding ──────────────────────────
   const wsIpConnectionCounts = new Map<string, number>();
 
-  wss = new WebSocketServer({ 
+  wss = new WebSocketServer({
     noServer: true,
     maxPayload: 32 * 1024 // 32 KB maximum payload per message to prevent buffer exhaustion
   });
@@ -1049,7 +1049,7 @@ async function startServer() {
       const result = await getConjunctionAssessment(conj, currentTles);
       const elapsedMs = Date.now() - startTime;
       console.log(`[Gemini API] ✅ Live assessment completed in ${elapsedMs}ms for ${id}. Status: ${result.assessment?.status || 'DONE'}`);
-      
+
       aiAssessmentCache.set(id, {
         data: result,
         expiresAt: Date.now() + 15 * 60 * 1000 // 15-minute cache
