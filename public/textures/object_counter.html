@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Div 2 — Object Counter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@500;600;700&family=Spectral:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:       #071019;
+      --line:     rgba(201,217,138,.11);
+      --line-dim: rgba(255,255,255,.055);
+      --text:     #edf2ec;
+      --muted:    #8ca49a;
+      --dim:      #526258;
+      --lime:     #c9d98a;
+      --lime-lo:  rgba(201,217,138,.07);
+      --green:    #7fcf8a;
+      --red:      #f0506a;
+      --blue:     #5c9bff;
+      --mono: "DM Mono", ui-monospace, monospace;
+      --sans: Manrope, Arial, sans-serif;
+      --serif: Spectral, Georgia, serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(circle at 70% 30%, rgba(94,129,91,.13), transparent 42%),
+        radial-gradient(circle at 20% 80%, rgba(201,217,138,.05), transparent 38%),
+        #071019;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 40px 24px;
+    }
+
+    /* ── Card ── */
+    .object-counter {
+      width: 240px;
+      padding: 18px 20px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: linear-gradient(165deg, rgba(13,30,44,.97) 0%, rgba(9,18,27,.99) 100%);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,.02) inset,
+        0 24px 60px -20px rgba(0,0,0,.7),
+        0 0 36px -14px rgba(201,217,138,.06);
+    }
+
+    /* ── Total header ── */
+    .total-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding-bottom: 13px;
+      border-bottom: 1px solid var(--line-dim);
+      margin-bottom: 14px;
+    }
+    .total-label {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      font-weight: 500;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    .total-value {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .total-number {
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--lime);
+      line-height: 1;
+    }
+    .total-word {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      font-weight: 500;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* ── Category rows ── */
+    .category-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .cat-row {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    /* Dot + label left side */
+    .cat-left {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      flex: 1;
+    }
+    .cat-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .cat-dot.green { background: var(--green); box-shadow: 0 0 8px rgba(127,207,138,.50); }
+    .cat-dot.red   { background: var(--red);   box-shadow: 0 0 8px rgba(240,80,106,.45); }
+    .cat-dot.blue  { background: var(--blue);  box-shadow: 0 0 8px rgba(92,155,255,.45); }
+
+    .cat-label {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* Count right */
+    .cat-count {
+      font-family: var(--mono);
+      font-size: 14px;
+      font-weight: 500;
+      min-width: 40px;
+      text-align: right;
+    }
+    .cat-count.green { color: var(--green); }
+    .cat-count.red   { color: var(--red);   }
+    .cat-count.blue  { color: var(--blue);  }
+
+    /* ── Footer micro line ── */
+    .counter-footer {
+      margin-top: 14px;
+      padding-top: 11px;
+      border-top: 1px solid var(--line-dim);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .counter-footer .cf-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    .counter-footer .cf-live {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--lime);
+    }
+    .counter-footer .cf-live .dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--lime);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: .45; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="object-counter">
+
+    <!-- Total header -->
+    <div class="total-row">
+      <span class="total-label">Objects Tracked</span>
+      <div class="total-value">
+        <span class="total-number">2,323</span>
+        <span class="total-word">Total</span>
+      </div>
+    </div>
+
+    <!-- Categories -->
+    <div class="category-list">
+
+      <!-- Satellites -->
+      <div class="cat-row">
+        <div class="cat-left">
+          <span class="cat-dot green"></span>
+          <span class="cat-label">Satellites</span>
+        </div>
+        <span class="cat-count green">1,276</span>
+      </div>
+
+      <!-- Space Debris -->
+      <div class="cat-row">
+        <div class="cat-left">
+          <span class="cat-dot red"></span>
+          <span class="cat-label">Space Debris</span>
+        </div>
+        <span class="cat-count red">901</span>
+      </div>
+
+      <!-- Rocket Bodies -->
+      <div class="cat-row">
+        <div class="cat-left">
+          <span class="cat-dot blue"></span>
+          <span class="cat-label">Rocket Bodies</span>
+        </div>
+        <span class="cat-count blue">146</span>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="counter-footer">
+      <span class="cf-label">CelesTrak · LEO Snapshot</span>
+      <span class="cf-live">
+        <span class="dot"></span>
+        Synced Live
+      </span>
+    </div>
+
+  </div>
+
+</body>
+</html>

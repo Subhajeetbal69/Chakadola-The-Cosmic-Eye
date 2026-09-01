@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Div 3 — Telemetry Dossier</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@500;600;700&family=Spectral:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:       #071019;
+      --line:     rgba(201,217,138,.11);
+      --line-dim: rgba(255,255,255,.055);
+      --text:     #edf2ec;
+      --muted:    #8ca49a;
+      --dim:      #526258;
+      --lime:     #c9d98a;
+      --lime-lo:  rgba(201,217,138,.07);
+      --lime-mid: rgba(201,217,138,.15);
+      --lime-glo: rgba(201,217,138,.28);
+      --green:    #7fcf8a;
+      --red:      #f0506a;
+      --mono: "DM Mono", ui-monospace, monospace;
+      --sans: Manrope, Arial, sans-serif;
+      --serif: Spectral, Georgia, serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(circle at 70% 60%, rgba(94,129,91,.14), transparent 42%),
+        radial-gradient(circle at 15% 20%, rgba(201,217,138,.06), transparent 38%),
+        #071019;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 40px 24px;
+    }
+
+    /* ── Card ── */
+    .telemetry-dossier {
+      width: 310px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: linear-gradient(165deg, rgba(13,30,44,.97) 0%, rgba(9,18,27,.99) 100%);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,.02) inset,
+        0 28px 70px -20px rgba(0,0,0,.75),
+        0 0 40px -16px rgba(201,217,138,.07);
+      overflow: hidden;
+    }
+
+    /* ── Header bar ── */
+    .dossier-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--line-dim);
+      background: linear-gradient(180deg, rgba(201,217,138,.04) 0%, transparent 100%);
+    }
+    .dossier-head-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .head-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--lime);
+      box-shadow: 0 0 8px rgba(201,217,138,.60);
+      animation: pulse 2.2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(201,217,138,.60); }
+      50%       { opacity: .6; box-shadow: 0 0 4px rgba(201,217,138,.25); }
+    }
+    .dossier-title {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .close-btn {
+      width: 26px; height: 26px;
+      border-radius: 7px;
+      display: grid; place-items: center;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--dim);
+      cursor: pointer;
+      transition: .18s;
+    }
+    .close-btn:hover {
+      color: var(--text);
+      background: rgba(255,255,255,.06);
+      border-color: var(--line-dim);
+    }
+    .close-btn svg { width: 14px; height: 14px; }
+
+    /* ── Object name ── */
+    .object-name {
+      padding: 14px 16px 0;
+    }
+    .object-id {
+      font-family: var(--mono);
+      font-size: 17px;
+      font-weight: 500;
+      color: var(--lime);
+      letter-spacing: .06em;
+    }
+
+    /* ── Data rows ── */
+    .data-table {
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    .data-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--line-dim);
+    }
+    .data-row:last-child { border-bottom: none; }
+
+    .data-key {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      font-weight: 1000;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      color: var(--dim);
+    }
+    .data-val {
+      font-family: var(--mono);
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text);
+      text-align: right;
+    }
+    .data-val.lime  { color: var(--lime); }
+    .data-val.muted { color: var(--muted); }
+
+    /* Type badge */
+    .type-badge {
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 9.5px;
+      font-weight: 500;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+      padding: 4px 9px;
+      border-radius: 6px;
+      color: #0f1a06;
+      background: linear-gradient(170deg, #d9ed98, #b2c85a);
+      box-shadow: 0 4px 12px -4px rgba(180,210,80,.45);
+    }
+
+    /* Status badge */
+    .status-val {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: .06em;
+      color: var(--green);
+    }
+    .status-val .sdot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px rgba(127,207,138,.55);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    /* ── Action footer ── */
+    .dossier-foot {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--line-dim);
+      background: rgba(4,10,16,.35);
+    }
+    .btn-full {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 10px 14px;
+      border-radius: 11px;
+      border: none;
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: .06em;
+      color: #0f1a06;
+      background: linear-gradient(170deg, #d9ed98, #b2c85a);
+      box-shadow: 0 6px 20px -6px rgba(180,210,80,.50);
+      transition: filter .18s, box-shadow .18s;
+    }
+    .btn-full svg { width: 13px; height: 13px; }
+    .btn-full:hover {
+      filter: brightness(1.07);
+      box-shadow: 0 8px 24px -6px rgba(180,210,80,.70);
+    }
+    .btn-2d {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 10px 14px;
+      border-radius: 11px;
+      border: 1px solid var(--line-dim);
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: .06em;
+      color: var(--muted);
+      background: rgba(255,255,255,.03);
+      transition: .18s;
+    }
+    .btn-2d svg { width: 13px; height: 13px; }
+    .btn-2d:hover {
+      color: var(--text);
+      background: rgba(255,255,255,.07);
+      border-color: rgba(255,255,255,.14);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="telemetry-dossier">
+
+    <!-- Header bar -->
+    <div class="dossier-head">
+      <div class="dossier-head-left">
+        <span class="head-dot"></span>
+        <span class="dossier-title">Telemetry Dossier</span>
+      </div>
+      <button class="close-btn" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M6 6l12 12M18 6L6 18"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Object name -->
+    <div class="object-name">
+      <span class="object-id">STARLINK-37868</span>
+    </div>
+
+    <!-- Data rows -->
+    <div class="data-table">
+
+      <div class="data-row">
+        <span class="data-key">Object</span>
+        <span class="data-val lime">STARLINK-37868</span>
+      </div>
+
+      <div class="data-row">
+        <span class="data-key">Type</span>
+        <span class="type-badge">Active Satellite</span>
+      </div>
+
+      <div class="data-row">
+        <span class="data-key">Regime</span>
+        <span class="data-val muted">LEO (Low Earth Orbit)</span>
+      </div>
+
+      <div class="data-row">
+        <span class="data-key">Altitude</span>
+        <span class="data-val">467.9 <span style="font-size:10.5px;color:var(--muted);">km</span></span>
+      </div>
+
+      <div class="data-row">
+        <span class="data-key">Velocity</span>
+        <span class="data-val">7.63 <span style="font-size:10.5px;color:var(--muted);">km/s</span></span>
+      </div>
+
+      <div class="data-row">
+        <span class="data-key">Inclination</span>
+        <span class="data-val">97.3°</span>
+      </div>
+
+      <div class="data-row" style="border-bottom:none;">
+        <span class="data-key">Status</span>
+        <span class="status-val">
+          <span class="sdot"></span>
+          Tracked (Live)
+        </span>
+      </div>
+
+    </div>
+
+    <!-- Action buttons -->
+    <div class="dossier-foot">
+      <button class="btn-full">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+        </svg>
+        Full Dossier
+      </button>
+      <button class="btn-2d">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="12" rx="10" ry="4.5"/>
+          <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/>
+        </svg>
+        2D View
+      </button>
+    </div>
+
+  </div>
+
+</body>
+</html>

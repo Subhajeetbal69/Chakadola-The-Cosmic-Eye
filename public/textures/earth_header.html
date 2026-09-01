@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Div 1 — Earth Header</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@500;600;700&family=Spectral:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:       #071019;
+      --panel:    #0b1520;
+      --surface:  #0d1e2c;
+      --line:     rgba(201,217,138,.12);
+      --line-dim: rgba(255,255,255,.06);
+      --text:     #edf2ec;
+      --muted:    #8ca49a;
+      --dim:      #526258;
+      --lime:     #c9d98a;
+      --lime-lo:  rgba(201,217,138,.07);
+      --lime-mid: rgba(201,217,138,.16);
+      --lime-glo: rgba(201,217,138,.30);
+      --green:    #7fcf8a;
+      --mono: "DM Mono", ui-monospace, monospace;
+      --sans: Manrope, Arial, sans-serif;
+      --serif: Spectral, Georgia, serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(circle at 30% 40%, rgba(94,129,91,.14), transparent 42%),
+        radial-gradient(circle at 85% 80%, rgba(201,217,138,.06), transparent 38%),
+        #071019;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 40px 24px;
+    }
+
+    /* ── Card ── */
+    .earth-header {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 18px 20px 16px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: linear-gradient(165deg, rgba(13,30,44,.96) 0%, rgba(9,18,27,.98) 100%);
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,.02) inset,
+        0 24px 60px -20px rgba(0,0,0,.7),
+        0 0 40px -16px rgba(201,217,138,.06);
+      width: 400px;
+    }
+
+    /* ── Title row ── */
+    .title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .title-row h1 {
+      font-family: var(--serif);
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: .03em;
+      line-height: 1;
+    }
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: .20em;
+      text-transform: uppercase;
+      color: var(--lime);
+      padding: 3px 8px;
+      border-radius: 5px;
+      border: 1px solid rgba(201,217,138,.32);
+      background: rgba(201,217,138,.07);
+    }
+    .live-badge .dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--lime);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--lime-glo); }
+      50%       { opacity: .7; box-shadow: 0 0 0 4px transparent; }
+    }
+
+    /* ── Subtitle ── */
+    .subtitle {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--lime);
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line-dim);
+    }
+
+    /* ── Nav buttons ── */
+    .nav-row {
+      display: flex;
+      gap: 7px;
+    }
+    .nav-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: .06em;
+      padding: 8px 13px;
+      border-radius: 10px;
+      border: 1px solid var(--line-dim);
+      background: rgba(255,255,255,.03);
+      color: var(--muted);
+      cursor: pointer;
+      transition: color .18s, background .18s, border-color .18s, box-shadow .22s;
+      white-space: nowrap;
+    }
+    .nav-btn svg {
+      width: 13px; height: 13px;
+      flex-shrink: 0;
+      opacity: .75;
+      transition: opacity .18s;
+    }
+    .nav-btn:hover {
+      color: var(--text);
+      background: rgba(255,255,255,.06);
+      border-color: rgba(255,255,255,.12);
+    }
+    .nav-btn:hover svg { opacity: 1; }
+
+    /* Active / selected state */
+    .nav-btn.active {
+      color: #0f1a06;
+      background: linear-gradient(170deg, #d9ed98, #b2c85a);
+      border-color: transparent;
+      box-shadow: 0 6px 18px -6px rgba(180,210,80,.55), 0 0 0 1px rgba(255,255,255,.08) inset;
+    }
+    .nav-btn.active svg { opacity: 1; color: #0f1a06; }
+    .nav-btn.active:hover { filter: brightness(1.06); }
+
+    .badge-count {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(0,0,0,.18);
+      margin-left: 1px;
+    }
+    .nav-btn.active .badge-count { background: rgba(0,0,0,.14); }
+  </style>
+</head>
+<body>
+
+  <div class="earth-header">
+
+    <!-- Title + LIVE -->
+    <div class="title-row">
+      <h1>EARTH</h1>
+      <span class="live-badge">
+        <span class="dot"></span>
+        Live
+      </span>
+    </div>
+
+    <!-- Subtitle -->
+    <div class="subtitle">Orbital Debris &amp; Satellite Tracker</div>
+
+    <!-- Nav buttons -->
+    <nav class="nav-row">
+      <button class="nav-btn active">
+        <!-- Globe icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M3.6 9h16.8M3.6 15h16.8"/>
+          <path d="M12 3c-2.5 3.5-2.5 14.5 0 18M12 3c2.5 3.5 2.5 14.5 0 18"/>
+        </svg>
+        3D Earth
+      </button>
+
+      <button class="nav-btn">
+        <!-- Orbit icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="12" rx="10" ry="4.5"/>
+          <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/>
+        </svg>
+        2D Plane
+      </button>
+
+      <button class="nav-btn">
+        <!-- List icon -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+        </svg>
+        Registry
+        <span class="badge-count">2323</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <script>
+    /* Tab switching */
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>

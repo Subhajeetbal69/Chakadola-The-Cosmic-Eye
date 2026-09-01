@@ -7,6 +7,10 @@ import { useTelemetry } from '../context/TelemetryContext';
 import { Play, Pause, FastForward, RotateCcw, AlertTriangle, ChevronRight, Share2, Globe, Orbit, MousePointer2, Move, Clock, Info, Rocket, Orbit as OrbitIcon, Navigation, RotateCw, ZoomIn, Lock, Focus, Map as MapIcon, Compass, ShieldAlert, Zap, Layers, RefreshCw, ZoomOut, Gauge, X, Radio, Maximize2 } from 'lucide-react';
 import { NavPill } from '../components/NavPill';
 import './EarthPage.css';
+import './EarthHeader.css';
+import './ObjectCounter.css';
+import './TimeControl.css';
+import './TelemetryDossier.css';
 
 /**
  * Determine orbital regime (LEO, MEO, GEO, HEO) based on altitude and period.
@@ -138,133 +142,152 @@ export function EarthPage() {
         {/* Floating Mission Control HUD Overlay */}
         <div className={`earth-ui-overlay ${sceneLoaded ? 'visible' : ''}`}>
           {/* Top Left - Minimal Title & View Mode Selector */}
-          <div className="ui-panel top-left">
-            <div className="flex items-center gap-2">
+          <div className="earth-header">
+            {/* Title + LIVE */}
+            <div className="eh-title-row">
               <h1>EARTH</h1>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                LIVE
+              <span className="eh-live-badge">
+                <span className="eh-dot"></span>
+                Live
               </span>
             </div>
-            <p>ORBITAL DEBRIS & SATELLITE TRACKER</p>
 
-            {/* View Mode Switcher */}
-            <div className="flex items-center gap-1 mt-2.5 pt-2.5 border-t border-white/10">
-              <button
-                id="tab-3d-realistic"
+            {/* Subtitle */}
+            <div className="eh-subtitle">Orbital Debris &amp; Satellite Tracker</div>
+
+            {/* Nav buttons */}
+            <nav className="eh-nav-row">
+              <button 
+                className={`eh-nav-btn ${activeTab === '3D' ? 'active' : ''}`}
                 onClick={() => setActiveTab('3D')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeTab === '3D'
-                    ? 'bg-cyan-600 text-white shadow-[0_0_10px_rgba(6,182,212,0.4)]'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`}
               >
-                <Globe className="w-3 h-3" />
-                <span>3D Earth</span>
+                {/* Globe icon */}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="9"/>
+                  <path d="M3.6 9h16.8M3.6 15h16.8"/>
+                  <path d="M12 3c-2.5 3.5-2.5 14.5 0 18M12 3c2.5 3.5 2.5 14.5 0 18"/>
+                </svg>
+                3D Earth
               </button>
 
-              <button
-                id="tab-2d-view"
+              <button 
+                className={`eh-nav-btn ${activeTab === '2D' ? 'active' : ''}`}
                 onClick={() => setActiveTab('2D')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeTab === '2D'
-                    ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)]'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`}
               >
-                <Orbit className="w-3 h-3" />
-                <span>2D Plane</span>
+                {/* Orbit icon */}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <ellipse cx="12" cy="12" rx="10" ry="4.5"/>
+                  <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/>
+                </svg>
+                2D Plane
               </button>
 
-              <button
-                id="tab-catalog"
+              <button 
+                className={`eh-nav-btn ${activeTab === 'CATALOG' ? 'active' : ''}`}
                 onClick={() => setActiveTab('CATALOG')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeTab === 'CATALOG'
-                    ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)]'
-                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`}
               >
-                <Layers className="w-3 h-3" />
-                <span>Registry ({objects.length})</span>
+                {/* List icon */}
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+                </svg>
+                Registry
+                <span className="eh-badge-count">{objects.length}</span>
               </button>
-            </div>
+            </nav>
           </div>
 
           {/* Top Right - Status Counter & Color Legend */}
-          <div className="ui-panel top-right">
-            <div className="flex items-center justify-between gap-4 mb-2 pb-1.5 border-b border-white/10">
-              <span className="font-mono text-[10px] tracking-wider text-slate-400 font-bold uppercase">
-                OBJECTS TRACKED
-              </span>
-              <span className="font-mono text-xs font-bold text-cyan-300">
-                {objects.length.toLocaleString()} TOTAL
-              </span>
+          <div className="object-counter">
+            {/* Total header */}
+            <div className="oc-total-row">
+              <span className="oc-total-label">Objects Tracked</span>
+              <div className="oc-total-value">
+                <span className="oc-total-number">{objects.length.toLocaleString()}</span>
+                <span className="oc-total-word">Total</span>
+              </div>
             </div>
-            <div className="stats space-y-1.5">
-              <div className="flex items-center justify-between gap-4 text-xs font-mono">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#00ff66] shadow-[0_0_8px_#00ff66]" />
-                  <span className="text-slate-300">SATELLITES:</span>
+
+            {/* Categories */}
+            <div className="oc-category-list">
+              {/* Satellites */}
+              <div className="oc-cat-row">
+                <div className="oc-cat-left">
+                  <span className="oc-cat-dot green"></span>
+                  <span className="oc-cat-label">Satellites</span>
                 </div>
-                <span className="highlight text-[#00ff66] font-bold">{activeSatsCount.toLocaleString()}</span>
+                <span className="oc-cat-count green">{activeSatsCount.toLocaleString()}</span>
               </div>
-              <div className="flex items-center justify-between gap-4 text-xs font-mono">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#ff2244] shadow-[0_0_8px_#ff2244]" />
-                  <span className="text-slate-300">SPACE DEBRIS:</span>
+
+              {/* Space Debris */}
+              <div className="oc-cat-row">
+                <div className="oc-cat-left">
+                  <span className="oc-cat-dot red"></span>
+                  <span className="oc-cat-label">Space Debris</span>
                 </div>
-                <span className="highlight text-[#ff4466] font-bold">{debrisCount.toLocaleString()}</span>
+                <span className="oc-cat-count red">{debrisCount.toLocaleString()}</span>
               </div>
-              <div className="flex items-center justify-between gap-4 text-xs font-mono">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#0088ff] shadow-[0_0_8px_#0088ff]" />
-                  <span className="text-slate-300">ROCKET BODIES:</span>
+
+              {/* Rocket Bodies */}
+              <div className="oc-cat-row">
+                <div className="oc-cat-left">
+                  <span className="oc-cat-dot blue"></span>
+                  <span className="oc-cat-label">Rocket Bodies</span>
                 </div>
-                <span className="highlight text-[#33aaff] font-bold">{rbCount.toLocaleString()}</span>
+                <span className="oc-cat-count blue">{rbCount.toLocaleString()}</span>
               </div>
+            </div>
+
+            {/* Footer */}
+            <div className="oc-counter-footer">
+              <span className="oc-cf-label">CelesTrak · LEO Snapshot</span>
+              <span className="oc-cf-live">
+                <span className="oc-dot"></span>
+                Synced Live
+              </span>
             </div>
           </div>
 
           {/* Bottom Left - Camera Zoom Controls & Sim Speed */}
-          <div className="ui-panel camera-controls">
-            <div className="flex items-center gap-1 border-r border-white/10 pr-2">
-              <button
-                onClick={() => triggerZoom('IN')}
-                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-cyan-600 text-slate-300 hover:text-white transition-all cursor-pointer border border-white/10"
-                title="Zoom In"
-              >
-                <ZoomIn className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => triggerZoom('OUT')}
-                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-cyan-600 text-slate-300 hover:text-white transition-all cursor-pointer border border-white/10"
-                title="Zoom Out"
-              >
-                <ZoomOut className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => triggerZoom('RESET')}
-                className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer border border-white/10"
-                title="Reset Center View"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-            </div>
+          <div className="control-bar" role="toolbar" aria-label="Viewport controls">
+            {/* Zoom In */}
+            <button className="tc-icon-btn" onClick={() => triggerZoom('IN')} title="Zoom in" aria-label="Zoom in">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="7"/>
+                <path d="M21 21l-4.35-4.35"/>
+                <path d="M11 8v6M8 11h6"/>
+              </svg>
+            </button>
 
-            {/* Simulation Speed Buttons */}
-            <div className="flex items-center gap-1 pl-1">
-              <Gauge className="w-3.5 h-3.5 text-cyan-400 mr-1" />
+            {/* Zoom Out */}
+            <button className="tc-icon-btn" onClick={() => triggerZoom('OUT')} title="Zoom out" aria-label="Zoom out">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="7"/>
+                <path d="M21 21l-4.35-4.35"/>
+                <path d="M8 11h6"/>
+              </svg>
+            </button>
+
+            {/* Reset */}
+            <button className="tc-icon-btn" onClick={() => triggerZoom('RESET')} title="Reset view" aria-label="Reset view">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+              </svg>
+            </button>
+
+            {/* Divider */}
+            <div className="tc-divider" aria-hidden="true"></div>
+
+            {/* Speed controls */}
+            <div className="tc-speed-group" role="group" aria-label="Simulation speed">
+              <span className="tc-speed-prefix">Speed</span>
               {[1, 30, 60, 150].map((spd) => (
                 <button
                   key={spd}
                   onClick={() => setSimSpeed(spd)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all cursor-pointer ${
-                    simSpeed === spd
-                      ? 'bg-cyan-600 text-white shadow-[0_0_8px_rgba(6,182,212,0.4)]'
-                      : 'bg-slate-800/60 text-slate-400 hover:text-white'
-                  }`}
+                  className={`tc-speed-btn ${simSpeed === spd ? 'active' : ''}`}
                 >
-                  {spd}x
+                  {spd}×
                 </button>
               ))}
             </div>
@@ -279,96 +302,85 @@ export function EarthPage() {
 
           {/* Selected Object Info Panel */}
           {selectedObject && (
-            <div className="ui-panel object-info-panel">
-              {/* Header with Close Button */}
-              <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#00e5ff]" />
-                  <span className="font-mono text-[10px] font-bold tracking-widest text-cyan-300 uppercase">
-                    TELEMETRY DOSSIER
+            <div className="telemetry-dossier">
+              {/* Header bar */}
+              <div className="td-dossier-head">
+                <div className="td-dossier-head-left">
+                  <span className="td-head-dot"></span>
+                  <span className="td-dossier-title">Telemetry Dossier</span>
+                </div>
+                <button className="td-close-btn" onClick={() => setSelectedObject(null)} aria-label="Close">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M6 6l12 12M18 6L6 18"/>
+                  </svg>
+                </button>
+              </div>
+
+              {/* Object name */}
+              <div className="td-object-name">
+                <span className="td-object-id" title={selectedObject.name}>{selectedObject.name}</span>
+              </div>
+
+              {/* Data rows */}
+              <div className="td-data-table">
+                <div className="td-data-row">
+                  <span className="td-data-key">Object</span>
+                  <span className="td-data-val lime">{selectedObject.name}</span>
+                </div>
+
+                <div className="td-data-row">
+                  <span className="td-data-key">Type</span>
+                  <span className="td-type-badge">{selectedObject.classification.replace('_', ' ')}</span>
+                </div>
+
+                <div className="td-data-row">
+                  <span className="td-data-key">Regime</span>
+                  <span className="td-data-val muted">{getOrbitType(selectedObject.altitudeKm || 400, selectedObject.periodMin)}</span>
+                </div>
+
+                <div className="td-data-row">
+                  <span className="td-data-key">Altitude</span>
+                  <span className="td-data-val">
+                    {selectedObject.altitudeKm ? selectedObject.altitudeKm.toFixed(1) : '420.0'} <span style={{fontSize:'10.5px',color:'var(--td-muted)'}}>km</span>
                   </span>
                 </div>
-                <button
-                  onClick={() => setSelectedObject(null)}
-                  className="p-1 rounded-lg bg-white/5 hover:bg-white/15 text-slate-400 hover:text-white transition-all cursor-pointer border border-white/10"
-                  title="Close Panel"
-                >
-                  <X className="w-3.5 h-3.5" />
+
+                <div className="td-data-row">
+                  <span className="td-data-key">Velocity</span>
+                  <span className="td-data-val">
+                    {selectedObject.speedKmS ? selectedObject.speedKmS.toFixed(2) : '7.66'} <span style={{fontSize:'10.5px',color:'var(--td-muted)'}}>km/s</span>
+                  </span>
+                </div>
+
+                <div className="td-data-row">
+                  <span className="td-data-key">Inclination</span>
+                  <span className="td-data-val">
+                    {selectedObject.inclinationDeg ? selectedObject.inclinationDeg.toFixed(1) : '51.6'}°
+                  </span>
+                </div>
+
+                <div className="td-data-row" style={{ borderBottom: 'none' }}>
+                  <span className="td-data-key">Status</span>
+                  <span className="td-status-val">
+                    <span className="td-sdot"></span>
+                    Tracked (Live)
+                  </span>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="td-dossier-foot">
+                <button className="td-btn-full" onClick={() => setIsDossierOpen(true)}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                  </svg>
+                  Full Dossier
                 </button>
-              </div>
-
-              <div className="info-row">
-                <span className="label">OBJECT</span>
-                <span className="value primary" title={selectedObject.name}>
-                  {selectedObject.name}
-                </span>
-              </div>
-
-              <div className="info-row">
-                <span className="label">TYPE</span>
-                <span className={`value text-xs font-semibold px-2 py-0.5 rounded ${
-                  selectedObject.classification === 'ACTIVE_SATELLITE'
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    : selectedObject.classification === 'ROCKET_BODY'
-                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                    : 'bg-red-500/20 text-red-300 border border-red-500/30'
-                }`}>
-                  {selectedObject.classification.replace('_', ' ')}
-                </span>
-              </div>
-
-              <div className="info-row">
-                <span className="label">REGIME</span>
-                <span className="value text-xs text-slate-300">
-                  {getOrbitType(selectedObject.altitudeKm || 400, selectedObject.periodMin)}
-                </span>
-              </div>
-
-              <div className="info-row">
-                <span className="label">ALTITUDE</span>
-                <span className="value text-cyan-300 font-bold">
-                  {selectedObject.altitudeKm ? `${selectedObject.altitudeKm.toFixed(1)} km` : '420.0 km'}
-                </span>
-              </div>
-
-              <div className="info-row">
-                <span className="label">VELOCITY</span>
-                <span className="value text-white">
-                  {selectedObject.speedKmS ? `${selectedObject.speedKmS.toFixed(2)} km/s` : '7.66 km/s'}
-                </span>
-              </div>
-
-              <div className="info-row">
-                <span className="label">INCLINATION</span>
-                <span className="value text-slate-300">
-                  {selectedObject.inclinationDeg ? `${selectedObject.inclinationDeg.toFixed(1)}°` : '51.6°'}
-                </span>
-              </div>
-
-              <div className="info-row">
-                <span className="label">STATUS</span>
-                <span className="value active flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  TRACKED (LIVE)
-                </span>
-              </div>
-
-              <div className="mt-2.5 pt-2.5 border-t border-white/10 flex items-center gap-2">
-                <button
-                  onClick={() => setIsDossierOpen(true)}
-                  className="flex-1 py-1.5 px-2.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-[0_0_12px_rgba(6,182,212,0.3)] cursor-pointer"
-                >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                  <span>Full Dossier</span>
-                </button>
-                
-                <button
-                  onClick={() => {
-                    setActiveTab('2D');
-                  }}
-                  className="py-1.5 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition-all border border-white/10 cursor-pointer"
-                  title="View 2D Orbital Plane"
-                >
+                <button className="td-btn-2d" onClick={() => setActiveTab('2D')} title="View 2D Orbital Plane">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <ellipse cx="12" cy="12" rx="10" ry="4.5"/>
+                    <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/>
+                  </svg>
                   2D View
                 </button>
               </div>
@@ -379,33 +391,20 @@ export function EarthPage() {
 
       {/* ── 2D Orbit Plane Modal / Overlay ─────────────────────── */}
       {activeTab === '2D' && (
-        <div className="fixed inset-2 sm:inset-6 z-50 bg-slate-950/95 border border-white/15 rounded-2xl sm:rounded-3xl p-2.5 sm:p-5 shadow-2xl backdrop-blur-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
-          <div className="flex items-center justify-between pb-2 mb-1.5 border-b border-white/10 gap-2">
-            <div className="flex items-center gap-1.5 sm:gap-2.5 text-cyan-400 font-mono text-xs sm:text-sm font-bold truncate">
-              <Orbit className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-400 shrink-0" />
-              <span className="truncate">2D ORBITAL PROJECTION</span>
-            </div>
-            <button
-              onClick={() => setActiveTab('3D')}
-              className="px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(6,182,212,0.4)] cursor-pointer shrink-0 whitespace-nowrap"
-            >
-              <Globe className="w-3.5 h-3.5" />
-              <span>Return to 3D</span>
-            </button>
-          </div>
-          <div className="flex-1 w-full h-full min-h-[300px] overflow-hidden rounded-xl sm:rounded-2xl">
-            <Orbit2DView
-              objects={objects}
-              selectedConjunction={selectedConjunction}
-              selectedObject={selectedObject}
-              syncState={conjunctionSyncState}
-              onSelectObject={(obj) => {
-                setSelectedObject(obj);
-                setIsDossierOpen(true);
-              }}
-              onResetSync={handleResetSync}
-            />
-          </div>
+        <div className="fixed inset-0 z-50 grid place-items-center p-4 sm:p-8 bg-slate-950/80 backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
+          <Orbit2DView
+            objects={objects}
+            selectedConjunction={selectedConjunction}
+            selectedObject={selectedObject}
+            syncState={conjunctionSyncState}
+            onSelectObject={(obj) => {
+              setSelectedObject(obj);
+              setIsDossierOpen(true);
+            }}
+            onResetSync={handleResetSync}
+            onClose={() => setActiveTab('3D')}
+            simSpeed={simSpeed}
+          />
         </div>
       )}
 

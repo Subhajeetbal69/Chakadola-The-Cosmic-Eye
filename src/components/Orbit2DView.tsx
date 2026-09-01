@@ -10,6 +10,7 @@ import {
   Compass,
 } from 'lucide-react';
 import { TrackedObjectSummary, ConjunctionEvent, ConjunctionSyncState } from '../types';
+import './Orbit2DView.css';
 
 interface Orbit2DViewProps {
   objects: TrackedObjectSummary[];
@@ -18,6 +19,8 @@ interface Orbit2DViewProps {
   syncState?: ConjunctionSyncState | null;
   onSelectObject?: (obj: TrackedObjectSummary) => void;
   onResetSync?: () => void;
+  onClose?: () => void;
+  simSpeed?: number;
 }
 
 export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
@@ -27,6 +30,8 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
   syncState = null,
   onSelectObject,
   onResetSync,
+  onClose,
+  simSpeed = 1000,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [plane, setPlane] = useState<'XY' | 'XZ' | 'YZ'>('XY');
@@ -42,6 +47,27 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
   const [clockDisplay, setClockDisplay] = useState<number>(0);
   const [hoveredObject, setHoveredObject] = useState<TrackedObjectSummary | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+
+  const lastTimeRef = useRef<number>(performance.now());
+  const lastClockDisplayRef = useRef<number>(-1);
+  const lastZoomDisplayRef = useRef<number>(-1);
+
+  const getInterpolatedPosition = useCallback((obj: TrackedObjectSummary, stepFloat: number) => {
+    const rawPt = obj.currentPosition || obj.positionKm;
+    if (!obj.orbitSample || obj.orbitSample.length === 0) return rawPt;
+    const len = obj.orbitSample.length;
+    const currentSimStep = Math.floor(stepFloat) % len;
+    const nextSimStep = (currentSimStep + 1) % len;
+    const fraction = stepFloat - Math.floor(stepFloat);
+    const pt1 = obj.orbitSample[currentSimStep] || rawPt;
+    const pt2 = obj.orbitSample[nextSimStep] || rawPt;
+    if (!pt1 || !pt2) return rawPt;
+    return {
+      x: pt1.x + (pt2.x - pt1.x) * fraction,
+      y: pt1.y + (pt2.y - pt1.y) * fraction,
+      z: pt1.z + (pt2.z - pt1.z) * fraction,
+    };
+  }, []);
 
   const EARTH_RADIUS_KM = 6378.137;
   const VIEW_RADIUS_KM = 46000;
@@ -259,9 +285,8 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
         if (mode === 'CONJUNCTION' && !isConjunctionPair) continue;
         if (mode === 'OBJECT' && selectedObject?.id !== obj.id) continue;
 
-        const sampleIdx = currentSimStep % (obj.orbitSample?.length || 1);
-        const rawPt = obj.currentPosition || obj.positionKm;
-        const pt = obj.orbitSample && obj.orbitSample[sampleIdx] ? obj.orbitSample[sampleIdx] : rawPt;
+        const stepFloat = simTimeStepRef.current;
+        const pt = getInterpolatedPosition(obj, stepFloat);
         if (!pt) continue;
         const { px, py } = project(pt.x, pt.y, pt.z);
         const isHovered = hoveredObject?.id === obj.id;
@@ -292,8 +317,10 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
     if (mode === 'CONJUNCTION' && selectedConjunction && Array.isArray(objects)) {
       const objA = objects.find((o) => o.id === selectedConjunction.objectA?.id);
       const objB = objects.find((o) => o.id === selectedConjunction.objectB?.id);
-      const posA = objA?.currentPosition || objA?.positionKm || selectedConjunction.positionAAtTca;
-      const posB = objB?.currentPosition || objB?.positionKm || selectedConjunction.positionBAtTca;
+      
+      const stepFloat = simTimeStepRef.current;
+      const posA = objA ? getInterpolatedPosition(objA, stepFloat) : selectedConjunction.positionAAtTca;
+      const posB = objB ? getInterpolatedPosition(objB, stepFloat) : selectedConjunction.positionBAtTca;
       if (posA && posB) {
         const pA = project(posA.x, posA.y, posA.z);
         const pB = project(posB.x, posB.y, posB.z);
@@ -324,28 +351,37 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
 
   useEffect(() => {
     let frameId: number;
-    let lastTime = performance.now();
-    let clockCounter = 0;
     const loop = (currentTime: number) => {
-      const delta = currentTime - lastTime;
+      const delta = currentTime - lastTimeRef.current;
       zoomRef.current += (targetZoomRef.current - zoomRef.current) * 0.09;
       panRef.current.x += (targetPanRef.current.x - panRef.current.x) * 0.09;
       panRef.current.y += (targetPanRef.current.y - panRef.current.y) * 0.09;
-      if (delta > 60 && isPlaying) {
-        simTimeStepRef.current = (simTimeStepRef.current + 1) % 1440;
-        lastTime = currentTime;
-        clockCounter++;
-        if (clockCounter % 10 === 0) {
-          setClockDisplay(simTimeStepRef.current);
-          setZoomDisplay(Number(zoomRef.current.toFixed(1)));
-        }
+      
+      if (isPlaying) {
+        const simSpeedMultiplier = simSpeed || 1000;
+        const minutesPassed = delta * (simSpeedMultiplier / 60000);
+        simTimeStepRef.current = (simTimeStepRef.current + minutesPassed) % 1440;
       }
+      
+      lastTimeRef.current = currentTime;
+      
+      const currentClock = Math.floor(simTimeStepRef.current);
+      if (currentClock !== lastClockDisplayRef.current) {
+        lastClockDisplayRef.current = currentClock;
+        setClockDisplay(currentClock);
+      }
+      const currentZoom = Number(zoomRef.current.toFixed(1));
+      if (currentZoom !== lastZoomDisplayRef.current) {
+        lastZoomDisplayRef.current = currentZoom;
+        setZoomDisplay(currentZoom);
+      }
+      
       drawCanvas();
       frameId = requestAnimationFrame(loop);
     };
     frameId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(frameId);
-  }, [isPlaying, drawCanvas]);
+  }, [isPlaying, drawCanvas, simSpeed]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -372,9 +408,8 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
         if (mode === 'CONJUNCTION' && !isConjunctionPair) continue;
         if (mode === 'OBJECT' && selectedObject?.id !== obj.id) continue;
 
-        const sampleIdx = currentSimStep % (obj.orbitSample?.length || 1);
-        const rawPt = obj.currentPosition || obj.positionKm;
-        const pt = obj.orbitSample && obj.orbitSample[sampleIdx] ? obj.orbitSample[sampleIdx] : rawPt;
+        const stepFloat = simTimeStepRef.current;
+        const pt = getInterpolatedPosition(obj, stepFloat);
         if (!pt) continue;
         let px = 0, py = 0;
         if (plane === 'XY') { px = originX + pt.x * scale; py = originY - pt.y * scale; }
@@ -423,9 +458,8 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
         if (mode === 'CONJUNCTION' && !isConjunctionPair) continue;
         if (mode === 'OBJECT' && selectedObject?.id !== obj.id) continue;
 
-        const sampleIdx = currentSimStep % (obj.orbitSample?.length || 1);
-        const rawPt = obj.currentPosition || obj.positionKm;
-        const pt = obj.orbitSample && obj.orbitSample[sampleIdx] ? obj.orbitSample[sampleIdx] : rawPt;
+        const stepFloat = simTimeStepRef.current;
+        const pt = getInterpolatedPosition(obj, stepFloat);
         if (!pt) continue;
         let px = 0, py = 0;
         if (plane === 'XY') { px = originX + pt.x * scale; py = originY - pt.y * scale; }
@@ -464,63 +498,90 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
   const rbCount = Array.isArray(objects) ? objects.filter((o) => o.classification === 'ROCKET_BODY').length : 0;
 
   return (
-    <div id="orbit-2d-panel" className="w-full h-full bg-slate-950/80 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col relative">
-      {/* ── Top Responsive Controls Bar (Zero Overlap Guaranteed) ── */}
-      <div className="absolute top-2 sm:top-3 inset-x-2 sm:inset-x-3 z-10 flex flex-wrap items-center justify-between gap-1.5 pointer-events-none">
-        {/* Left: Classification Object Breakdown */}
-        <div className="pointer-events-auto bg-slate-900/90 backdrop-blur-xl px-2 sm:px-3 py-1 sm:py-1.5 border border-white/10 rounded-xl flex items-center gap-2 sm:gap-3 text-xs shadow-2xl shrink-0">
-          <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-[#00ff66] shadow-[0_0_6px_#00ff66]" />
-            <span className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-200">
-              <span className="hidden sm:inline">SATS </span>{activeCount}
-            </span>
+    <div className="o2-shell">
+      {/* ── Top bar ── */}
+      <header className="o2-topbar">
+        <div className="o2-topbar-left">
+          <span className="o2-topbar-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <ellipse cx="12" cy="12" rx="10" ry="4.5"/>
+              <ellipse cx="12" cy="12" rx="4.5" ry="10" transform="rotate(60 12 12)"/>
+              <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+            </svg>
+          </span>
+          <span className="o2-topbar-title">2D Orbital Projection</span>
+        </div>
+        <div className="o2-topbar-right">
+          {onClose && (
+            <button className="o2-btn-return" onClick={onClose}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M3.6 9h16.8M3.6 15h16.8"/>
+                <path d="M12 3c-2.5 3.5-2.5 14.5 0 18M12 3c2.5 3.5 2.5 14.5 0 18"/>
+              </svg>
+              Return to 3D
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* ── Canvas area ── */}
+      <div className="o2-canvas-wrap flex-1 w-full relative">
+        <canvas
+          ref={canvasRef}
+          onMouseMove={handleMouseMove}
+          onClick={handleCanvasClick}
+          onTouchStart={handleTouchStart}
+          onWheel={handleWheel}
+          onMouseLeave={() => { setHoveredObject(null); setTooltipPos(null); }}
+          className="w-full h-full block cursor-crosshair touch-none absolute inset-0 z-0"
+        />
+
+        {/* Legend overlay */}
+        <div className="o2-legend">
+          <div className="o2-legend-item">
+            <span className="o2-ldot green"></span>
+            SATS <span className="o2-lcount">{activeCount}</span>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-[#ff2244] shadow-[0_0_6px_#ff2244]" />
-            <span className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-200">
-              <span className="hidden sm:inline">DEBRIS </span>{debrisCount}
-            </span>
+          <div className="o2-legend-item">
+            <span className="o2-ldot red"></span>
+            DEBRIS <span className="o2-lcount">{debrisCount}</span>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-[#00d4ff] shadow-[0_0_6px_#00d4ff]" />
-            <span className="text-[10px] sm:text-[11px] font-mono font-bold text-slate-200">
-              <span className="hidden sm:inline">R/B </span>{rbCount}
-            </span>
+          <div className="o2-legend-item">
+            <span className="o2-ldot blue"></span>
+            R/B <span className="o2-lcount">{rbCount}</span>
           </div>
         </div>
 
-        {/* Right: Plane Switcher & Zoom Buttons */}
-        <div className="pointer-events-auto bg-slate-900/90 backdrop-blur-xl p-1 sm:p-1.5 border border-white/10 rounded-xl flex items-center gap-1 sm:gap-1.5 shadow-2xl shrink-0">
-          <div className="flex items-center gap-0.5 sm:gap-1 px-1 border-r border-white/10">
-            <Compass className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-cyan-400 shrink-0" />
-            <span className="hidden lg:inline text-[10px] font-mono font-bold text-slate-400 mr-0.5">PLANE:</span>
-            {(['XY', 'XZ', 'YZ'] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPlane(p)}
-                className={`px-1.5 sm:px-2 py-0.5 rounded-lg font-mono text-[9px] sm:text-[10px] font-bold transition-all cursor-pointer ${
-                  plane === p ? 'bg-cyan-500 text-slate-950 font-black shadow-[0_0_8px_rgba(6,182,212,0.5)]' : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                {p}
-              </button>
-            ))}
+        {/* Plane / zoom controls */}
+        <div className="o2-plane-ctrl">
+          <span className="o2-plane-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <ellipse cx="12" cy="12" rx="9" ry="4.2"/>
+              <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>
+            </svg>
+            Plane:
+          </span>
+          <div className="o2-plane-btns">
+            <button className={`o2-plane-btn ${plane === 'XY' ? 'active' : ''}`} onClick={() => setPlane('XY')}>XY</button>
+            <button className={`o2-plane-btn ${plane === 'XZ' ? 'active' : ''}`} onClick={() => setPlane('XZ')}>XZ</button>
+            <button className={`o2-plane-btn ${plane === 'YZ' ? 'active' : ''}`} onClick={() => setPlane('YZ')}>YZ</button>
           </div>
-          <div className="flex items-center gap-0.5 sm:gap-1 pl-0.5">
-            <button onClick={() => { targetZoomRef.current = Math.min(4.0, targetZoomRef.current + 0.3); setZoomDisplay(Number(targetZoomRef.current.toFixed(1))); }} className="p-0.5 sm:p-1 rounded hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer" title="Zoom in">
-              <ZoomIn className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+          <div className="o2-plane-divider"></div>
+          <div className="o2-zoom-controls">
+            <button className="o2-zoom-btn" title="Zoom out" onClick={() => { targetZoomRef.current = Math.max(0.5, targetZoomRef.current - 0.3); setZoomDisplay(Number(targetZoomRef.current.toFixed(1))); }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35M8 11h6"/></svg>
             </button>
-            <span className="font-mono text-[9px] sm:text-[10px] font-bold text-cyan-400 min-w-[24px] sm:min-w-[30px] text-center">{(zoomDisplay * 100).toFixed(0)}%</span>
-            <button onClick={() => { targetZoomRef.current = Math.max(0.5, targetZoomRef.current - 0.3); setZoomDisplay(Number(targetZoomRef.current.toFixed(1))); }} className="p-0.5 sm:p-1 rounded hover:bg-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer" title="Zoom out">
-              <ZoomOut className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            <span className="o2-zoom-info">{(zoomDisplay * 100).toFixed(0)}%</span>
+            <button className="o2-zoom-btn" title="Zoom in" onClick={() => { targetZoomRef.current = Math.min(4.0, targetZoomRef.current + 0.3); setZoomDisplay(Number(targetZoomRef.current.toFixed(1))); }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/></svg>
             </button>
           </div>
         </div>
-      </div>
 
-      <div className="relative flex-1 w-full min-h-[340px] sm:min-h-[460px]">
+        {/* Conjunction Sync Overlay */}
         {syncState && syncState.isActive && selectedConjunction && (
-          <div className="absolute top-12 sm:top-14 left-1/2 -translate-x-1/2 z-20 bg-slate-950/95 backdrop-blur-md border border-cyan-500/60 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.3)] flex items-center gap-1.5 text-xs font-mono max-w-[92vw]">
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20 bg-slate-950/95 backdrop-blur-md border border-cyan-500/60 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.3)] flex items-center gap-1.5 text-xs font-mono max-w-[92vw]">
             <div className="flex items-center gap-1 text-cyan-300 font-bold">
               <Focus className="w-3 h-3 text-cyan-400 animate-pulse" />
               <span className="text-[10px] sm:text-xs">TCA SYNC</span>
@@ -533,49 +594,69 @@ export const Orbit2DView: React.FC<Orbit2DViewProps> = ({
             )}
           </div>
         )}
-        <canvas
-          ref={canvasRef}
-          onMouseMove={handleMouseMove}
-          onClick={handleCanvasClick}
-          onTouchStart={handleTouchStart}
-          onWheel={handleWheel}
-          onMouseLeave={() => { setHoveredObject(null); setTooltipPos(null); }}
-          className="w-full h-full block cursor-crosshair touch-none"
-        />
+
+        {/* Satellite tooltip */}
         {hoveredObject && tooltipPos && (
-          <div className="absolute z-30 pointer-events-none bg-slate-900/95 backdrop-blur-2xl border border-white/20 p-2.5 sm:p-3.5 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.8)] text-xs font-mono text-slate-200 max-w-[260px] sm:max-w-none" style={{ left: Math.min(tooltipPos.x + 12, window.innerWidth - 280), top: Math.max(10, Math.min(tooltipPos.y + 12, 380)) }}>
-            <div className="font-bold text-white text-xs sm:text-sm mb-1 flex items-center gap-1.5">
-              <span className="truncate">{hoveredObject.name}</span>
-              <span className={`w-2 h-2 shrink-0 rounded-full ${hoveredObject.classification === 'DEBRIS' ? 'bg-[#ff2244]' : hoveredObject.classification === 'ROCKET_BODY' ? 'bg-[#00d4ff]' : 'bg-[#00ff66]'}`} />
+          <div
+            className="o2-sat-tooltip show"
+            style={{
+              left: Math.min(tooltipPos.x, window.innerWidth - 100),
+              top: Math.max(0, tooltipPos.y)
+            }}
+          >
+            <div className="o2-tt-header">
+              <span className="o2-tt-dot" style={{ background: hoveredObject.classification === 'DEBRIS' ? 'var(--o2-red)' : hoveredObject.classification === 'ROCKET_BODY' ? 'var(--o2-blue)' : 'var(--o2-green)' }}></span>
+              <span className="o2-tt-name" style={{ color: hoveredObject.classification === 'DEBRIS' ? 'var(--o2-red)' : hoveredObject.classification === 'ROCKET_BODY' ? 'var(--o2-blue)' : 'var(--o2-green)' }}>{hoveredObject.name}</span>
+              <span className="o2-tt-live"></span>
             </div>
-            <div className="text-slate-400 text-[10px] sm:text-[11px]">NORAD ID: #{hoveredObject.noradId}</div>
-            <div className="text-slate-400 text-[10px] sm:text-[11px]">Type: {hoveredObject.classification}</div>
-            <div className="text-cyan-400 text-[10px] sm:text-[11px] mt-0.5 font-semibold">Altitude: {(hoveredObject.altitudeKm ?? 0).toFixed(1)} km</div>
-            <div className="text-slate-400 text-[10px] sm:text-[11px]">Speed: {(hoveredObject.speedKmS ?? 0).toFixed(2)} km/s</div>
+            <div className="o2-tt-sep"></div>
+            <div className="o2-tt-row">NORAD ID: <span>#{hoveredObject.noradId}</span></div>
+            <div className="o2-tt-row">Type: <span>{hoveredObject.classification}</span></div>
+            <div className="o2-tt-row o2-tt-hi">Altitude: <span>{(hoveredObject.altitudeKm ?? 0).toFixed(1)} km</span></div>
+            <div className="o2-tt-row o2-tt-hi">Speed: <span>{(hoveredObject.speedKmS ?? 0).toFixed(2)} km/s</span></div>
           </div>
         )}
       </div>
 
-      <div className="p-2 sm:p-3 bg-slate-900/90 backdrop-blur-2xl border-t border-white/10 flex flex-wrap items-center justify-between gap-1.5 text-xs">
-        <div className="flex items-center gap-1.5">
-          <button onClick={() => setIsPlaying(!isPlaying)} className="px-2 sm:px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 transition-all flex items-center gap-1 cursor-pointer">
-            {isPlaying ? <Pause className="w-3 h-3 text-cyan-400" /> : <Play className="w-3 h-3 text-emerald-400" />}
-            <span className="text-[9px] sm:text-[10px] font-mono font-bold">{isPlaying ? 'PAUSE' : 'PLAY'}</span>
+      {/* ── Bottom bar ── */}
+      <footer className="o2-bottombar">
+        <div className="o2-bottombar-left">
+          <button className={`o2-ctrl-btn ${!isPlaying ? 'active' : ''}`} onClick={() => setIsPlaying(!isPlaying)}>
+            {isPlaying ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+                <rect x="6" y="4" width="4" height="16" rx="1"/>
+                <rect x="14" y="4" width="4" height="16" rx="1"/>
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+              </svg>
+            )}
+            {isPlaying ? 'Pause' : 'Play'}
           </button>
-          <button onClick={handleResetTime} className="p-1 sm:p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10 transition-all cursor-pointer" title="Reset to T0">
-            <RotateCcw className="w-3 h-3" />
+          <button className="o2-ctrl-btn" onClick={handleResetTime} title="Reset Time">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
           </button>
-          <div className="flex items-center gap-1 text-[10px] sm:text-[11px] text-slate-300 font-mono bg-black/40 px-2 py-1 rounded-lg border border-white/10">
-            <Clock className="w-3 h-3 text-cyan-400" />
-            <span>T+ <strong className="text-cyan-300">{Math.floor(clockDisplay / 60)}h {(clockDisplay % 60).toString().padStart(2, '0')}m</strong></span>
+          <div className="o2-timer-chip">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <circle cx="12" cy="12" r="9"/>
+              <path d="M12 7v5l3 3"/>
+            </svg>
+            T+ <span className="o2-timer-val">{Math.floor(clockDisplay / 60)}h {(clockDisplay % 60).toString().padStart(2, '0')}m</span>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="text-[9px] sm:text-[10px] font-mono text-slate-400 bg-white/5 px-2 py-1 rounded-lg border border-white/10">
-            FRAME: <strong className="text-slate-200">ECI</strong> &nbsp;|&nbsp; <strong className="text-cyan-400">{plane}-PLANE</strong>
-          </div>
+        <div className="o2-bottombar-right">
+          <span className="o2-frame-display">
+            <span className="o2-frame-display-label">Frame:</span>
+            <span className="o2-frame-display-eci">ECI</span>
+            <span className="o2-frame-display-sep">|</span>
+            <span className="o2-frame-display-plane">{plane}-PLANE</span>
+          </span>
         </div>
-      </div>
+      </footer>
     </div>
   );
 };

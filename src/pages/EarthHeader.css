@@ -1,0 +1,146 @@
+/* ── Earth Header specific tokens (if not globally defined) ── */
+:root {
+  --eh-line:     rgba(201,217,138,.12);
+  --eh-line-dim: rgba(255,255,255,.06);
+  --eh-text:     #edf2ec;
+  --eh-muted:    #8ca49a;
+  --eh-lime:     #c9d98a;
+  --eh-lime-glo: rgba(201,217,138,.30);
+  --eh-mono: "DM Mono", ui-monospace, monospace;
+  --eh-sans: Manrope, Arial, sans-serif;
+  --eh-serif: Spectral, Georgia, serif;
+}
+
+/* ── Card ── */
+.earth-header {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--eh-line);
+  background: linear-gradient(165deg, rgba(13,30,44,.96) 0%, rgba(9,18,27,.98) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.02) inset,
+    0 24px 60px -20px rgba(0,0,0,.7),
+    0 0 40px -16px rgba(201,217,138,.06);
+  pointer-events: auto; /* Ensure clickable since it's an overlay */
+  font-family: var(--eh-sans);
+  color: var(--eh-text);
+  /* Replace the absolute positioning of ui-panel top-left */
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 10;
+  width: 400px;
+  transform: scale(0.85);
+  transform-origin: top left;
+}
+
+/* ── Title row ── */
+.eh-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.eh-title-row h1 {
+  font-family: var(--eh-serif);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  line-height: 1;
+  margin: 0;
+}
+.eh-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--eh-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: .20em;
+  text-transform: uppercase;
+  color: var(--eh-lime);
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid rgba(201,217,138,.32);
+  background: rgba(201,217,138,.07);
+}
+.eh-live-badge .eh-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--eh-lime);
+  animation: eh-pulse 2s ease-in-out infinite;
+}
+@keyframes eh-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--eh-lime-glo); }
+  50%       { opacity: .7; box-shadow: 0 0 0 4px transparent; }
+}
+
+/* ── Subtitle ── */
+.eh-subtitle {
+  font-family: var(--eh-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--eh-lime);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--eh-line-dim);
+  margin: 0;
+}
+
+/* ── Nav buttons ── */
+.eh-nav-row {
+  display: flex;
+  gap: 7px;
+}
+.eh-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--eh-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  padding: 8px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--eh-line-dim);
+  background: rgba(255,255,255,.03);
+  color: var(--eh-muted);
+  cursor: pointer;
+  transition: color .18s, background .18s, border-color .18s, box-shadow .22s;
+  white-space: nowrap;
+}
+.eh-nav-btn svg {
+  width: 13px; height: 13px;
+  flex-shrink: 0;
+  opacity: .75;
+  transition: opacity .18s;
+}
+.eh-nav-btn:hover {
+  color: var(--eh-text);
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.12);
+}
+.eh-nav-btn:hover svg { opacity: 1; }
+
+/* Active / selected state */
+.eh-nav-btn.active {
+  color: #0f1a06;
+  background: linear-gradient(170deg, #d9ed98, #b2c85a);
+  border-color: transparent;
+  box-shadow: 0 6px 18px -6px rgba(180,210,80,.55), 0 0 0 1px rgba(255,255,255,.08) inset;
+}
+.eh-nav-btn.active svg { opacity: 1; color: #0f1a06; }
+.eh-nav-btn.active:hover { filter: brightness(1.06); }
+
+.eh-badge-count {
+  font-family: var(--eh-mono);
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0,0,0,.18);
+  margin-left: 1px;
+}
+.eh-nav-btn.active .eh-badge-count { background: rgba(0,0,0,.14); }

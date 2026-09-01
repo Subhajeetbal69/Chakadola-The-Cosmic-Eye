@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2D Orbital Projection — Asteria Mission Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@500;600;700&family=Spectral:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:        #071019;
+      --panel:     #0b1520;
+      --line:      rgba(201,217,138,.11);
+      --line-dim:  rgba(255,255,255,.055);
+      --text:      #edf2ec;
+      --muted:     #8ca49a;
+      --dim:       #445852;
+      --lime:      #c9d98a;
+      --lime-lo:   rgba(201,217,138,.07);
+      --lime-mid:  rgba(201,217,138,.15);
+      --lime-glo:  rgba(201,217,138,.28);
+      --green:     #7fcf8a;
+      --red:       #f0506a;
+      --blue:      #5c9bff;
+      --mono: "DM Mono", ui-monospace, monospace;
+      --sans: Manrope, Arial, sans-serif;
+      --serif: Spectral, Georgia, serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { min-height: 100%; }
+    body {
+      min-height: 100vh;
+      font-family: var(--sans);
+      color: var(--text);
+      background: var(--bg);
+      display: grid;
+      place-items: center;
+      padding: 32px 20px;
+    }
+
+    /* ── Layout shell ── */
+    .shell {
+      display: grid;
+      grid-template-rows: 48px 1fr 46px;
+      width: 100%;
+      max-width: 1100px;
+      height: min(660px, calc(100svh - 64px));
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      overflow: hidden;
+      box-shadow: 0 32px 80px -24px rgba(0,0,0,.7), 0 0 40px -16px rgba(201,217,138,.05);
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(13,28,42,.96) 0%, rgba(9,18,27,.92) 100%);
+      backdrop-filter: blur(8px);
+      z-index: 20;
+    }
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .topbar-icon {
+      color: var(--lime);
+      display: flex;
+      align-items: center;
+    }
+    .topbar-icon svg { width: 16px; height: 16px; }
+    .topbar-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: var(--lime);
+    }
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-return {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: .08em;
+      padding: 7px 14px;
+      border-radius: 9px;
+      border: 1px solid rgba(201,217,138,.28);
+      background: rgba(201,217,138,.07);
+      color: var(--lime);
+      cursor: pointer;
+      transition: .18s;
+    }
+    .btn-return svg { width: 13px; height: 13px; }
+    .btn-return:hover {
+      background: rgba(201,217,138,.14);
+      border-color: rgba(201,217,138,.45);
+    }
+
+    /* ── Canvas area ── */
+    .canvas-wrap {
+      position: relative;
+      overflow: hidden;
+    }
+    #orbital2d {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Canvas overlays ── */
+    /* Legend — top left */
+    .legend {
+      position: absolute;
+      top: 14px; left: 16px;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 7px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: rgba(9,18,27,.72);
+      backdrop-filter: blur(10px);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0 10px;
+    }
+    .legend-item:first-child { padding-left: 0; }
+    .legend-item:last-child  { padding-right: 0; }
+    .legend-item + .legend-item {
+      border-left: 1px solid var(--line-dim);
+    }
+    .ldot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .ldot.green { background: var(--green); box-shadow: 0 0 6px rgba(127,207,138,.55); }
+    .ldot.red   { background: var(--red);   box-shadow: 0 0 6px rgba(240,80,106,.50); }
+    .ldot.blue  { background: var(--blue);  box-shadow: 0 0 6px rgba(92,155,255,.50); }
+    .lcount { color: var(--text); margin-left: 2px; }
+
+    /* Plane selector — top right */
+    .plane-ctrl {
+      position: absolute;
+      top: 14px; right: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: rgba(9,18,27,.72);
+      backdrop-filter: blur(10px);
+    }
+    .plane-label {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      font-weight: 1000;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--dim);
+      padding-right: 4px;
+      border-right: 1px solid var(--line-dim);
+      margin-right: 2px;
+    }
+    .plane-label svg { width: 12px; height: 12px; vertical-align: middle; margin-right: 4px; color: var(--lime); }
+    .plane-btns { display: flex; gap: 3px; }
+    .plane-btn {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: .06em;
+      padding: 5px 10px;
+      border-radius: 7px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: .18s;
+    }
+    .plane-btn:hover { color: var(--text); background: rgba(255,255,255,.05); }
+    .plane-btn.active {
+      color: #0f1a06;
+      background: linear-gradient(170deg, #d9ed98, #b2c85a);
+      border-color: transparent;
+      box-shadow: 0 4px 12px -4px rgba(180,210,80,.5);
+    }
+    .plane-divider { width: 1px; height: 18px; background: var(--line-dim); }
+    .zoom-info {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .08em;
+      color: var(--muted);
+      padding: 0 4px;
+    }
+    .zoom-btn {
+      display: grid; place-items: center;
+      width: 26px; height: 26px;
+      border-radius: 7px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: .18s;
+    }
+    .zoom-btn svg { width: 13px; height: 13px; }
+    .zoom-btn:hover { color: var(--lime); background: rgba(201,217,138,.07); border-color: var(--line); }
+
+    /* Hover tooltip over satellite */
+    .sat-tooltip {
+      position: absolute;
+      pointer-events: none;
+      display: none;
+      flex-direction: column;
+      gap: 2px;
+      padding: 10px 13px;
+      border-radius: 11px;
+      border: 1px solid var(--line);
+      background: rgba(9,18,27,.92);
+      backdrop-filter: blur(14px);
+      transform: translate(-50%, -100%) translateY(-14px);
+      white-space: nowrap;
+      min-width: 190px;
+    }
+    .sat-tooltip.show { display: flex; }
+    .sat-tooltip .tt-header {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 5px;
+    }
+    .sat-tooltip .tt-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .sat-tooltip .tt-name {
+      font-family: var(--mono);
+      font-size: 11.5px;
+      font-weight: 500;
+      letter-spacing: .06em;
+      flex: 1;
+    }
+    .sat-tooltip .tt-live {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--lime);
+      animation: pulse 2s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    .sat-tooltip .tt-sep {
+      height: 1px;
+      background: var(--line-dim);
+      margin: 3px 0 6px;
+    }
+    .sat-tooltip .tt-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      font-family: var(--mono);
+      font-size: 9.5px;
+      font-weight: 1000;
+      color: var(--dim);
+      letter-spacing: .08em;
+    }
+    .sat-tooltip .tt-row span { color: var(--muted); }
+    .sat-tooltip .tt-row.tt-hi span { color: var(--lime); font-size: 10px; }
+
+    /* ── Bottom bar ── */
+    .bottombar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      border-top: 1px solid var(--line);
+      background: linear-gradient(0deg, rgba(13,28,42,.96) 0%, rgba(9,18,27,.92) 100%);
+      backdrop-filter: blur(8px);
+      z-index: 20;
+    }
+    .bottombar-left { display: flex; align-items: center; gap: 6px; }
+    .bottombar-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .ctrl-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: .08em;
+      padding: 7px 12px;
+      border-radius: 9px;
+      border: 1px solid var(--line-dim);
+      background: rgba(255,255,255,.03);
+      color: var(--muted);
+      cursor: pointer;
+      transition: .18s;
+    }
+    .ctrl-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+    .ctrl-btn:hover { color: var(--text); background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); }
+    .ctrl-btn.active {
+      color: var(--lime);
+      border-color: rgba(201,217,138,.28);
+      background: rgba(201,217,138,.06);
+    }
+
+    .timer-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: .12em;
+      color: var(--muted);
+      padding: 7px 12px;
+      border-radius: 9px;
+      border: 1px solid var(--line-dim);
+      background: rgba(255,255,255,.02);
+    }
+    .timer-chip svg { width: 13px; height: 13px; color: var(--lime); }
+    .timer-chip .timer-val { color: var(--lime); }
+
+    /* Bottom-left canvas controls overlay */
+    .canvas-controls {
+      position: absolute;
+      bottom: 14px;
+      left: 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      z-index: 10;
+    }
+
+    .frame-display {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-family: var(--mono);
+      font-size: 9.5px;
+      font-weight: 500;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    .frame-display-label { color: var(--dim); font-weight: 1000; }
+    .frame-display-sep   { color: var(--line-dim); }
+    .frame-display-eci   { color: var(--muted); }
+    .frame-display-plane { color: var(--lime); }
+
+    /* ── Zoom controls group ── */
+    .zoom-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* ══ Responsive ══ */
+
+    /* Tablet: fluid shell height already handled via min(); refine topbar at medium widths */
+    @media (max-width: 860px) {
+      body { padding: 20px 14px; }
+    }
+
+    /* Mobile: plane-ctrl → left side, vertical layout; legend → centered */
+    @media (max-width: 700px) {
+      body { padding: 12px 10px; }
+
+      .shell {
+        height: min(600px, calc(100svh - 24px));
+        border-radius: 12px;
+      }
+
+      /* Legend shifts to top-center to vacate the left corner */
+      .legend {
+        left: 50%;
+        transform: translateX(-50%);
+        right: auto;
+      }
+
+      /* Plane ctrl: move to left, become a vertical strip */
+      .plane-ctrl {
+        right: auto;
+        left: 16px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+        padding: 9px 10px;
+      }
+
+      /* Label separator flips from right-border to bottom-border */
+      .plane-label {
+        border-right: none;
+        border-bottom: 1px solid var(--line-dim);
+        padding-right: 0;
+        padding-bottom: 6px;
+        margin-right: 0;
+        margin-bottom: 2px;
+        width: 100%;
+      }
+
+      /* Plane buttons stack vertically */
+      .plane-btns {
+        flex-direction: column;
+        gap: 2px;
+        width: 100%;
+      }
+      .plane-btn {
+        width: 100%;
+        text-align: center;
+        padding: 5px 14px;
+      }
+
+      /* Divider becomes horizontal */
+      .plane-divider {
+        width: 100%;
+        height: 1px;
+      }
+
+      /* Zoom row stays horizontal inside the vertical strip */
+      .zoom-controls {
+        width: 100%;
+        justify-content: space-between;
+      }
+    }
+
+    /* Small mobile: tighten topbar and legend */
+    @media (max-width: 480px) {
+      .topbar { padding: 0 12px; }
+      .topbar-title { font-size: 9.5px; letter-spacing: .14em; }
+
+      .btn-return {
+        padding: 6px 10px;
+        font-size: 10px;
+        gap: 5px;
+      }
+
+      .legend { padding: 5px 8px; }
+      .legend-item {
+        padding: 0 6px;
+        font-size: 9px;
+        letter-spacing: .09em;
+      }
+      .legend-item:first-child { padding-left: 0; }
+      .legend-item:last-child  { padding-right: 0; }
+
+      .canvas-controls { gap: 4px; }
+      .ctrl-btn { padding: 6px 9px; font-size: 9.5px; }
+      .timer-chip { padding: 6px 9px; font-size: 9.5px; }
+
+      .bottombar { padding: 0 12px; }
+      .frame-display { font-size: 8.5px; letter-spacing: .12em; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ── Top bar ── -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="12" rx="10" ry="4.5"/>
+          <ellipse cx="12" cy="12" rx="4.5" ry="10" transform="rotate(60 12 12)"/>
+          <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+        </svg>
+      </span>
+      <span class="topbar-title">2D Orbital Projection</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn-return">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M3.6 9h16.8M3.6 15h16.8"/>
+          <path d="M12 3c-2.5 3.5-2.5 14.5 0 18M12 3c2.5 3.5 2.5 14.5 0 18"/>
+        </svg>
+        Return to 3D
+      </button>
+    </div>
+  </header>
+
+  <!-- ── Canvas area ── -->
+  <div class="canvas-wrap">
+    <canvas id="orbital2d"></canvas>
+
+    <!-- Legend overlay -->
+    <div class="legend">
+      <div class="legend-item">
+        <span class="ldot green"></span>
+        SATS <span class="lcount">1,276</span>
+      </div>
+      <div class="legend-item">
+        <span class="ldot red"></span>
+        DEBRIS <span class="lcount">901</span>
+      </div>
+      <div class="legend-item">
+        <span class="ldot blue"></span>
+        R/B <span class="lcount">146</span>
+      </div>
+    </div>
+
+    <!-- Plane / zoom controls -->
+    <div class="plane-ctrl">
+      <span class="plane-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <ellipse cx="12" cy="12" rx="9" ry="4.2"/>
+          <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>
+        </svg>
+        Plane:
+      </span>
+      <div class="plane-btns">
+        <button class="plane-btn active" data-plane="XY">XY</button>
+        <button class="plane-btn" data-plane="XZ">XZ</button>
+        <button class="plane-btn" data-plane="YZ">YZ</button>
+      </div>
+      <div class="plane-divider"></div>
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoomOut" title="Zoom out">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35M8 11h6"/></svg>
+        </button>
+        <span class="zoom-info" id="zoomPct">100%</span>
+        <button class="zoom-btn" id="zoomIn" title="Zoom in">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/></svg>
+        </button>
+      </div>
+    </div>
+
+
+    <!-- Satellite tooltip -->
+    <div class="sat-tooltip" id="satTooltip">
+      <div class="tt-header">
+        <span class="tt-dot" id="ttDot"></span>
+        <span class="tt-name" id="ttName">—</span>
+        <span class="tt-live"></span>
+      </div>
+      <div class="tt-sep"></div>
+      <div class="tt-row">NORAD ID: <span id="ttNorad">—</span></div>
+      <div class="tt-row">Type: <span id="ttType">—</span></div>
+      <div class="tt-row tt-hi">Altitude: <span id="ttAlt">—</span></div>
+      <div class="tt-row tt-hi">Speed: <span id="ttVel">—</span></div>
+    </div>
+  </div>
+
+  <!-- ── Bottom bar ── -->
+  <footer class="bottombar">
+    <div class="bottombar-left">
+      <button class="ctrl-btn active" id="pauseBtn">
+        <svg id="pauseIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+          <rect x="6" y="4" width="4" height="16" rx="1"/>
+          <rect x="14" y="4" width="4" height="16" rx="1"/>
+        </svg>
+        Pause
+      </button>
+      <button class="ctrl-btn" id="resetBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+          <path d="M3 3v5h5"/>
+        </svg>
+      </button>
+      <div class="timer-chip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 7v5l3 3"/>
+        </svg>
+        T+ <span class="timer-val" id="simTimer">0h 00m</span>
+      </div>
+    </div>
+    <div class="bottombar-right">
+      <span class="frame-display">
+        <span class="frame-display-label">Frame:</span>
+        <span class="frame-display-eci">ECI</span>
+        <span class="frame-display-sep">|</span>
+        <span class="frame-display-plane" id="framePlaneLabel">XY-PLANE</span>
+      </span>
+    </div>
+  </footer>
+
+</div><!-- /.shell -->
+
+<script>
+/* ────────────────────────────────────────────────────────────────── */
+/*  Canvas 2D Orbital Projection                                       */
+/* ────────────────────────────────────────────────────────────────── */
+
+const canvas  = document.getElementById('orbital2d');
+const ctx     = canvas.getContext('2d');
+const tooltip = document.getElementById('satTooltip');
+const wrap    = canvas.parentElement;
+
+/* ── Design tokens (mirrors CSS) ── */
+const C = {
+  bg:       '#071019',
+  lime:     '#c9d98a',
+  limeLo:   'rgba(201,217,138,0.10)',
+  limeMid:  'rgba(201,217,138,0.22)',
+  limeGlo:  'rgba(201,217,138,0.32)',
+  green:    '#7fcf8a',
+  greenGlo: 'rgba(127,207,138,0.45)',
+  red:      '#f0506a',
+  redGlo:   'rgba(240,80,106,0.45)',
+  blue:     '#5c9bff',
+  blueGlo:  'rgba(92,155,255,0.40)',
+  muted:    '#8ca49a',
+  dim:      '#445852',
+  ring:     'rgba(201,217,138,0.10)',
+  ringDash: 'rgba(201,217,138,0.16)',
+  text:     '#edf2ec',
+  mono:     '"DM Mono", ui-monospace, monospace',
+};
+
+/* ── State ── */
+let W, H, cx, cy;              // canvas dims & center
+let scale   = 1.0;
+let paused  = false;
+let simTime = 0;               // seconds elapsed
+let speedMult = 60;            // sim seconds per real second
+let currentPlane = 'XY';
+let stars = [];
+
+/* ── Orbital rings (km from Earth center, Earth radius ~6371 km) ── */
+const RINGS = [
+  { label: 'LEO (2,000 km)',  altKm: 2000,  style: 'solid',  opacity: 0.55 },
+  { label: 'MEO/GEO (35,786 km)', altKm: 35786, style: 'dashed', opacity: 0.14 },
+];
+
+/* ── Satellites ── */
+const SATS = [
+  {
+    id: 'STARLINK-4258',
+    noradId: '#56789',
+    satType: 'ACTIVE_SATELLITE',
+    color: C.green, glow: C.greenGlo,
+    orbitAltKm: 540,
+    incDeg: 53,
+    raan: 0,
+    speed: 0.00112,
+    theta: 0,
+    altKm: 540, velKms: 7.59,
+  },
+  {
+    id: 'CZ-6A DEB',
+    noradId: '#58042',
+    satType: 'DEBRIS',
+    color: C.red, glow: C.redGlo,
+    orbitAltKm: 542,
+    incDeg: 97,
+    raan: Math.PI * 0.08,
+    speed: 0.00110,
+    theta: -0.06,
+    altKm: 542, velKms: 7.58,
+  },
+];
+
+/* ── Scale helpers ── */
+const EARTH_R_KM = 6371;
+
+function earthPx()   { return Math.min(W, H) * 0.038 * scale; }
+function kmToPx(km)  { return (km / EARTH_R_KM) * earthPx(); }
+
+function satPos(sat) {
+  const r = earthPx() + kmToPx(sat.orbitAltKm);
+  if (currentPlane === 'XY') {
+    const inc = sat.incDeg * Math.PI / 180;
+    const x = cx + r * Math.cos(sat.theta) * Math.cos(sat.raan)
+                 - r * Math.sin(sat.theta) * Math.sin(sat.raan) * Math.cos(inc);
+    const y = cy + r * Math.cos(sat.theta) * Math.sin(sat.raan)
+                 + r * Math.sin(sat.theta) * Math.cos(sat.raan) * Math.cos(inc);
+    return { x, y };
+  }
+  if (currentPlane === 'XZ') {
+    const inc = sat.incDeg * Math.PI / 180;
+    const x = cx + r * Math.cos(sat.theta);
+    const y = cy - r * Math.sin(sat.theta) * Math.sin(inc);
+    return { x, y };
+  }
+  // YZ
+  const inc = sat.incDeg * Math.PI / 180;
+  const x = cx + r * Math.sin(sat.theta) * Math.cos(sat.raan);
+  const y = cy - r * Math.sin(sat.theta) * Math.sin(inc);
+  return { x, y };
+}
+
+/* ── Resize ── */
+function resize() {
+  W = canvas.width  = wrap.clientWidth;
+  H = canvas.height = wrap.clientHeight;
+  cx = W * 0.5;
+  cy = H * 0.52;
+  initStars();
+}
+
+/* ── Starfield ── */
+function initStars() {
+  stars = [];
+  const n = Math.round((W * H) / 4200);
+  for (let i = 0; i < n; i++) {
+    stars.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 0.9 + 0.15,
+      a: Math.random() * 0.55 + 0.08,
+      lime: Math.random() < 0.06,
+    });
+  }
+}
+
+/* ── Draw helpers ── */
+function drawStars() {
+  stars.forEach(s => {
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = s.lime
+      ? `rgba(201,217,138,${s.a * 0.65})`
+      : `rgba(210,228,218,${s.a * 0.5})`;
+    ctx.fill();
+  });
+}
+
+function drawRings() {
+  const ep = earthPx();
+  RINGS.forEach(ring => {
+    const r = ep + kmToPx(ring.altKm);
+    if (r > Math.max(W, H) * 1.8) return; // skip off-screen
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(201,217,138,${ring.opacity})`;
+    ctx.lineWidth = 0.7;
+    if (ring.style === 'dashed') ctx.setLineDash([5, 9]);
+    else ctx.setLineDash([]);
+    ctx.stroke();
+    ctx.restore();
+
+    /* ring label — placed on vertical axis */
+    const lx = cx + 8;
+    const ly = cy - r;
+    if (ly >= 25 && ly <= H - 20 && lx >= 10 && lx <= W - 10) {
+      ctx.font = `400 9px ${C.mono}`;
+      ctx.fillStyle = `rgba(201,217,138,${ring.opacity * 1.8})`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(ring.label.toUpperCase(), lx, ly);
+    }
+  });
+}
+
+function drawAxes() {
+  const len = Math.min(W, H) * 0.42 * scale;
+  const dash = [4, 8];
+
+  function drawAxis(x2, y2, label) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + x2, cy + y2);
+    ctx.strokeStyle = 'rgba(201,217,138,0.12)';
+    ctx.lineWidth = 0.8;
+    ctx.setLineDash(dash);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.font = `500 9px ${C.mono}`;
+    ctx.fillStyle = 'rgba(148,168,158,0.55)';
+
+    const isVertical = (x2 === 0);
+    if (isVertical) {
+      const lx = cx;
+      const ly = cy + y2 - 10;
+      if (ly >= 20 && ly <= H - 20 && lx >= 20 && lx <= W - 20) {
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(label, lx, ly);
+      }
+    } else {
+      const lx = cx + x2 + 10;
+      const ly = cy + y2;
+      if (lx >= 20 && lx <= W - 20 && ly >= 20 && ly <= H - 20) {
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, lx, ly);
+      }
+    }
+  }
+
+  const labels = {
+    'XY': [[len, 0, '+X (Vernal Equinox)'], [0, -len, '+Y Orbit Plane']],
+    'XZ': [[len, 0, '+X (Vernal Equinox)'], [0, -len, '+Z North Pole']],
+    'YZ': [[len, 0, '+Y Orbit Plane'], [0, -len, '+Z North Pole']],
+  };
+  (labels[currentPlane] || []).forEach(([x2, y2, l]) => drawAxis(x2, y2, l));
+}
+
+function drawEarth() {
+  const r = earthPx();
+  // deep glow
+  const glo = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 3.2);
+  glo.addColorStop(0,   'rgba(30,80,180,0.08)');
+  glo.addColorStop(0.5, 'rgba(20,50,120,0.04)');
+  glo.addColorStop(1,   'transparent');
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 3.2, 0, Math.PI * 2);
+  ctx.fillStyle = glo;
+  ctx.fill();
+
+  // atmosphere halo
+  const atm = ctx.createRadialGradient(cx, cy, r * 0.85, cx, cy, r * 1.35);
+  atm.addColorStop(0,   'rgba(60,120,255,0.28)');
+  atm.addColorStop(0.6, 'rgba(30,80,200,0.08)');
+  atm.addColorStop(1,   'transparent');
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 1.35, 0, Math.PI * 2);
+  ctx.fillStyle = atm;
+  ctx.fill();
+
+  // planet body
+  const grad = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.1, cx, cy, r);
+  grad.addColorStop(0,   '#2a5fc8');
+  grad.addColorStop(0.4, '#1a3a8a');
+  grad.addColorStop(0.8, '#0d1e4e');
+  grad.addColorStop(1,   '#060e28');
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // surface grid lines (subtle)
+  ctx.save();
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(80,130,255,0.12)';
+  ctx.lineWidth = 0.5;
+  for (let i = -2; i <= 2; i++) {
+    const yy = cy + (r * i * 0.45);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, Math.asin((yy - cy) / r), Math.PI - Math.asin((yy - cy) / r));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawOrbitalPath(sat) {
+  const ep    = earthPx();
+  const orbitR = ep + kmToPx(sat.orbitAltKm);
+  const steps  = 120;
+
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const t   = (i / steps) * Math.PI * 2;
+    const inc = sat.incDeg * Math.PI / 180;
+    let x, y;
+    if (currentPlane === 'XY') {
+      x = cx + orbitR * Math.cos(t) * Math.cos(sat.raan) - orbitR * Math.sin(t) * Math.sin(sat.raan) * Math.cos(inc);
+      y = cy + orbitR * Math.cos(t) * Math.sin(sat.raan) + orbitR * Math.sin(t) * Math.cos(sat.raan) * Math.cos(inc);
+    } else if (currentPlane === 'XZ') {
+      x = cx + orbitR * Math.cos(t);
+      y = cy - orbitR * Math.sin(t) * Math.sin(inc);
+    } else {
+      x = cx + orbitR * Math.sin(t) * Math.cos(sat.raan);
+      y = cy - orbitR * Math.sin(t) * Math.sin(inc);
+    }
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+
+  const col = sat.color === C.green
+    ? 'rgba(127,207,138,0.14)'
+    : 'rgba(240,80,106,0.14)';
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 0.8;
+  ctx.setLineDash([]);
+  ctx.stroke();
+}
+
+function drawSatellite(sat) {
+  const pos  = satPos(sat);
+  const dotR = 5;
+
+  // glow halo
+  const halo = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, dotR * 3.5);
+  halo.addColorStop(0,   sat.glow.replace('0.45', '0.55'));
+  halo.addColorStop(0.5, sat.glow.replace('0.45', '0.20'));
+  halo.addColorStop(1,   'transparent');
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, dotR * 3.5, 0, Math.PI * 2);
+  ctx.fillStyle = halo;
+  ctx.fill();
+
+  // dot
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, dotR, 0, Math.PI * 2);
+  ctx.fillStyle = sat.color;
+  ctx.fill();
+
+  // label
+  ctx.font = `500 11px ${C.mono}`;
+  ctx.fillStyle = sat.color;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(sat.id, pos.x + dotR + 5, pos.y - 2);
+}
+
+/* ── Closest-approach data ── */
+const CONJUNCTION = { distClosestApproach: 3.14 }; // km
+
+function drawMissDistance(s1, s2) {
+  const p1 = satPos(s1);
+  const p2 = satPos(s2);
+  const mx = (p1.x + p2.x) / 2;
+  const my = (p1.y + p2.y) / 2;
+
+  /* dashed red connecting line */
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(p1.x, p1.y);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.strokeStyle = 'rgba(240,80,106,0.70)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([7, 9]);
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  /* danger badge: ▲ + distance */
+  const distText = CONJUNCTION.distClosestApproach.toFixed(2) + ' km';
+  ctx.font = `500 10px ${C.mono}`;
+  const textW  = ctx.measureText(distText).width;
+  const tri    = 5;
+  const gap    = 6;
+  const totalW = tri * 2 + gap + textW;
+  const lx     = mx - totalW / 2;
+
+
+  /* filled warning triangle */
+  ctx.save();
+  ctx.fillStyle = C.red;
+  ctx.beginPath();
+  ctx.moveTo(lx + tri, my - tri + 0.5);        // apex
+  ctx.lineTo(lx,        my + tri * 0.72);       // bottom-left
+  ctx.lineTo(lx + tri * 2, my + tri * 0.72);   // bottom-right
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  /* distance text */
+  ctx.font = `500 10px ${C.mono}`;
+  ctx.fillStyle = C.red;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(distText, lx + tri * 2 + gap, my + 0.5);
+}
+
+/* ── Main render loop ── */
+let last = null;
+function render(ts) {
+  if (!last) last = ts;
+  const dt = (ts - last) / 1000;
+  last = ts;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // background
+  const bg = ctx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0,   '#071019');
+  bg.addColorStop(0.5, '#08131f');
+  bg.addColorStop(1,   '#071019');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // subtle vignette
+  const vig = ctx.createRadialGradient(cx, cy, H * 0.2, cx, cy, H * 0.8);
+  vig.addColorStop(0,   'transparent');
+  vig.addColorStop(1,   'rgba(4,8,14,0.55)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, H);
+
+  drawStars();
+  drawAxes();
+  drawRings();
+
+  // orbital paths (behind Earth)
+  SATS.forEach(s => drawOrbitalPath(s));
+
+  drawEarth();
+
+  // advance satellites
+  if (!paused) {
+    simTime += dt * speedMult;
+    SATS.forEach(s => { s.theta += s.speed * dt * speedMult; });
+    updateTimer();
+  }
+
+  drawMissDistance(SATS[0], SATS[1]);
+  SATS.forEach(s => drawSatellite(s));
+
+  requestAnimationFrame(render);
+}
+
+
+/* ── Timer ── */
+function updateTimer() {
+  const h = Math.floor(simTime / 3600);
+  const m = Math.floor((simTime % 3600) / 60);
+  document.getElementById('simTimer').textContent =
+    `${h}h ${String(m).padStart(2, '0')}m`;
+}
+
+/* ── Pause / play ── */
+const pauseBtn  = document.getElementById('pauseBtn');
+const pauseIcon = document.getElementById('pauseIcon');
+const playPath  = '<polygon points="5 3 19 12 5 21 5 3"/>';
+const pausePath = '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
+pauseBtn.addEventListener('click', () => {
+  paused = !paused;
+  pauseIcon.innerHTML = paused ? playPath : pausePath;
+  pauseBtn.classList.toggle('active', !paused);
+  for (const n of pauseBtn.childNodes) {
+    if (n.nodeType === 3 && n.textContent.trim())
+      n.textContent = paused ? ' Play' : ' Pause';
+  }
+});
+
+/* ── Reset ── */
+document.getElementById('resetBtn').addEventListener('click', () => {
+  simTime = 0;
+  SATS[0].theta = 0;
+  SATS[1].theta = -0.06;
+  updateTimer();
+});
+
+/* ── Plane selector ── */
+const framePlaneLabel = document.getElementById('framePlaneLabel');
+document.querySelectorAll('.plane-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.plane-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentPlane = btn.dataset.plane;
+    framePlaneLabel.textContent = currentPlane + '-PLANE';
+  });
+});
+
+
+/* ── Zoom ── */
+let zoomLevel = 100;
+function setZoom(z) {
+  zoomLevel = Math.max(40, Math.min(300, z));
+  scale = zoomLevel / 100;
+  document.getElementById('zoomPct').textContent = zoomLevel + '%';
+}
+document.getElementById('zoomIn').addEventListener('click',  () => setZoom(zoomLevel + 20));
+document.getElementById('zoomOut').addEventListener('click', () => setZoom(zoomLevel - 20));
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  setZoom(zoomLevel + (e.deltaY < 0 ? 15 : -15));
+}, { passive: false });
+
+/* ── Satellite hover tooltip ── */
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  let hit = null;
+
+  SATS.forEach(s => {
+    const p  = satPos(s);
+    const dx = mx - p.x;
+    const dy = my - p.y;
+    if (Math.sqrt(dx * dx + dy * dy) < 12) hit = { s, p };
+  });
+
+  if (hit) {
+    const s = hit.s;
+    document.getElementById('ttDot').style.background   = s.color;
+    document.getElementById('ttDot').style.boxShadow    = `0 0 6px ${s.glow}`;
+    document.getElementById('ttName').textContent       = s.id;
+    document.getElementById('ttName').style.color       = s.color;
+    document.getElementById('ttNorad').textContent      = s.noradId;
+    document.getElementById('ttType').textContent       = s.satType;
+    document.getElementById('ttAlt').textContent        = s.altKm + ' km';
+    document.getElementById('ttVel').textContent        = s.velKms + ' km/s';
+    tooltip.style.left = hit.p.x + 'px';
+    tooltip.style.top  = hit.p.y + 'px';
+    tooltip.classList.add('show');
+    canvas.style.cursor = 'crosshair';
+  } else {
+    tooltip.classList.remove('show');
+    canvas.style.cursor = 'default';
+  }
+});
+canvas.addEventListener('mouseleave', () => tooltip.classList.remove('show'));
+
+/* ── Init ── */
+window.addEventListener('resize', () => { resize(); });
+resize();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+/* ── Object Counter specific tokens ── */
+:root {
+  --oc-line:     rgba(201,217,138,.11);
+  --oc-line-dim: rgba(255,255,255,.055);
+  --oc-text:     #edf2ec;
+  --oc-muted:    #8ca49a;
+  --oc-dim:      #526258;
+  --oc-lime:     #c9d98a;
+  --oc-lime-lo:  rgba(201,217,138,.07);
+  --oc-green:    #7fcf8a;
+  --oc-red:      #f0506a;
+  --oc-blue:     #5c9bff;
+  --oc-mono: "DM Mono", ui-monospace, monospace;
+  --oc-sans: Manrope, Arial, sans-serif;
+  --oc-serif: Spectral, Georgia, serif;
+}
+
+/* ── Card ── */
+.object-counter {
+  width: 240px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  border: 1px solid var(--oc-line);
+  background: linear-gradient(165deg, rgba(13,30,44,.97) 0%, rgba(9,18,27,.99) 100%);
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,.02) inset,
+    0 24px 60px -20px rgba(0,0,0,.7),
+    0 0 36px -14px rgba(201,217,138,.06);
+  pointer-events: auto; /* Since it is an overlay panel */
+  font-family: var(--oc-sans);
+  color: var(--oc-text);
+  /* Replace absolute positioning */
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  z-index: 10;
+  transform: scale(0.85);
+  transform-origin: top right;
+}
+
+/* ── Total header ── */
+.oc-total-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 13px;
+  border-bottom: 1px solid var(--oc-line-dim);
+  margin-bottom: 14px;
+}
+.oc-total-label {
+  font-family: var(--oc-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--oc-dim);
+}
+.oc-total-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.oc-total-number {
+  font-family: var(--oc-mono);
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--oc-lime);
+  line-height: 1;
+}
+.oc-total-word {
+  font-family: var(--oc-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--oc-muted);
+}
+
+/* ── Category rows ── */
+.oc-category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.oc-cat-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+/* Dot + label left side */
+.oc-cat-left {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+}
+.oc-cat-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.oc-cat-dot.green { background: var(--oc-green); box-shadow: 0 0 8px rgba(127,207,138,.50); }
+.oc-cat-dot.red   { background: var(--oc-red);   box-shadow: 0 0 8px rgba(240,80,106,.45); }
+.oc-cat-dot.blue  { background: var(--oc-blue);  box-shadow: 0 0 8px rgba(92,155,255,.45); }
+
+.oc-cat-label {
+  font-family: var(--oc-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--oc-muted);
+}
+
+/* Count right */
+.oc-cat-count {
+  font-family: var(--oc-mono);
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 40px;
+  text-align: right;
+}
+.oc-cat-count.green { color: var(--oc-green); }
+.oc-cat-count.red   { color: var(--oc-red);   }
+.oc-cat-count.blue  { color: var(--oc-blue);  }
+
+/* ── Footer micro line ── */
+.oc-counter-footer {
+  margin-top: 14px;
+  padding-top: 11px;
+  border-top: 1px solid var(--oc-line-dim);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.oc-counter-footer .oc-cf-label {
+  font-family: var(--oc-mono);
+  font-size: 9px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--oc-dim);
+}
+.oc-counter-footer .oc-cf-live {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--oc-mono);
+  font-size: 9px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--oc-lime);
+}
+.oc-counter-footer .oc-cf-live .oc-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--oc-lime);
+  animation: oc-pulse 2s ease-in-out infinite;
+}
+@keyframes oc-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .45; }
+}
