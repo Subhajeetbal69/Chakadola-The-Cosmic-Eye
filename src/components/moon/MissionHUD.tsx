@@ -109,6 +109,27 @@ export function MissionHUD() {
           }}
         />
       </div>
+
+      {/* ── Mobile Compact Bottom Telemetry Dock (Phone Viewports) ── */}
+      {data.scrollProgress > 0.03 && data.scrollProgress < 0.86 && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-none sm:hidden flex items-center gap-3 px-3.5 py-1.5 rounded-full bg-slate-950/80 border border-cyan-500/30 backdrop-blur-md shadow-[0_0_15px_rgba(6,182,212,0.25)] text-[10px] font-['Orbitron'] tracking-wider text-slate-300">
+          <div className="flex items-center gap-1">
+            <span className="text-slate-500 text-[8px]">DIST</span>
+            <span className="text-white font-bold">{data.distance}</span>
+            <span className="text-cyan-400 text-[8px]">KM</span>
+          </div>
+          <div className="w-px h-3 bg-slate-700" />
+          <div className="flex items-center gap-1">
+            <span className="text-slate-500 text-[8px]">SCAN</span>
+            <span className="text-cyan-300 font-bold">{data.dataPercent}%</span>
+          </div>
+          <div className="w-px h-3 bg-slate-700" />
+          <div className="flex items-center gap-1">
+            <span className="text-slate-500 text-[8px]">CRATERS</span>
+            <span className="text-emerald-400 font-bold">{data.craters}/2</span>
+          </div>
+        </div>
+      )}
     </>
   );
 }

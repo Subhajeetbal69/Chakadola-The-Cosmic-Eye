@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Link } from 'react-router-dom';
 import * as THREE from 'three';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import ScrollController from '../components/moon/ScrollController';
 import MoonScene from '../components/moon/MoonScene';
 import MissionHUD from '../components/moon/MissionHUD';
@@ -64,6 +65,7 @@ function SectionText() {
           backdropFilter: `blur(${blurPx}px)`,
           WebkitBackdropFilter: `blur(${blurPx}px)`,
           backgroundColor: `rgba(6, 8, 16, ${opacity * 0.52})`,
+          touchAction: 'pan-y',
         }}
       >
         <div className="hero-tagline">
@@ -72,19 +74,19 @@ function SectionText() {
           BEGIN THE<br />MISSION
         </h1>
         <p className="hero-description">
-          Explore the unknown. Scroll to guide the rover across the lunar surface and uncover what waits at the far site.
+          Explore the unknown. Scroll or swipe to guide the rover across the lunar surface and uncover what waits at the far site.
         </p>
       </div>
     ),
     journey: (
-      <div className="section-text bottom-center" style={{ opacity }}>
+      <div className="section-text bottom-center" style={{ opacity, touchAction: 'pan-y' }}>
         <div className="hero-subtitle" style={{ fontSize: 'clamp(0.5rem, 1vw, 0.7rem)' }}>
           THE JOURNEY BEGINS
         </div>
       </div>
     ),
     final: (
-      <div className="section-text center pointer-events-none" style={{ opacity }}>
+      <div className="section-text center pointer-events-none" style={{ opacity, touchAction: 'pan-y' }}>
         <div className="discovery-title" style={{ fontSize: 'clamp(0.75rem, 1.8vw, 1.15rem)' }}>
           MISSION DISCOVERY
         </div>
@@ -138,8 +140,8 @@ function ScrollIndicator() {
   if (opacity < 0.01) return null;
 
   return (
-    <div className="scroll-indicator" style={{ opacity }}>
-      <div className="scroll-indicator-text">Scroll to Explore</div>
+    <div className="scroll-indicator" style={{ opacity, touchAction: 'pan-y' }}>
+      <div className="scroll-indicator-text">Scroll or Swipe to Explore</div>
       <div className="scroll-indicator-line" />
     </div>
   );
@@ -180,14 +182,14 @@ export function HomePage() {
             powerPreference: 'high-performance',
             stencil: false,
           }}
-          style={{ background: '#0a0a0f' }}
+          style={{ background: '#0a0a0f', touchAction: 'pan-y' }}
         >
           <MoonScene />
         </Canvas>
       </div>
 
       {/* Loading Screen */}
-      <LoadingScreen />
+      <LoadingScreen onLoaded={() => ScrollTrigger.refresh()} />
 
       {/* HTML Overlays */}
       <SectionText />

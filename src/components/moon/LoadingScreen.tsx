@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import missionState from '../../stores/missionStore';
 
 /**
  * LoadingScreen — cinematic loading overlay with sequential messages.
@@ -19,6 +20,7 @@ export function LoadingScreen({ onLoaded }: LoadingScreenProps) {
   const [progress, setProgress] = useState(0);
   const [messageIndex, setMessageIndex] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const startTime = useRef(Date.now());
 
   useEffect(() => {
@@ -46,7 +48,11 @@ export function LoadingScreen({ onLoaded }: LoadingScreenProps) {
       } else {
         setTimeout(() => {
           setLoaded(true);
+          missionState.isLoaded = true;
           if (onLoaded) onLoaded();
+          setTimeout(() => {
+            setHidden(true);
+          }, 1000);
         }, 400);
       }
     };
@@ -55,8 +61,16 @@ export function LoadingScreen({ onLoaded }: LoadingScreenProps) {
     return () => cancelAnimationFrame(rafId);
   }, [onLoaded]);
 
+  if (hidden) return null;
+
   return (
-    <div className={`loading-screen ${loaded ? 'loaded' : ''}`}>
+    <div
+      className={`loading-screen ${loaded ? 'loaded' : ''}`}
+      style={{
+        pointerEvents: loaded ? 'none' : 'auto',
+        touchAction: loaded ? 'pan-y' : 'none',
+      }}
+    >
       <div className="loading-logo">MISSION CONTROL</div>
       <div className="loading-messages">
         {LOADING_MESSAGES[messageIndex]}
