@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { Link } from 'react-router-dom';
 import * as THREE from 'three';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import ScrollController from '../components/moon/ScrollController';
@@ -9,7 +8,6 @@ import MissionHUD from '../components/moon/MissionHUD';
 import LoadingScreen from '../components/moon/LoadingScreen';
 import missionState from '../stores/missionStore';
 import { useTelemetry } from '../context/TelemetryContext';
-import { Globe, ShieldAlert, Radio } from 'lucide-react';
 import { NavPill } from '../components/NavPill';
 
 /**
@@ -36,9 +34,9 @@ function SectionText() {
         const fadeOut = Math.min(1, (0.22 - p) / 0.03);
         setOpacity(Math.min(fadeIn, fadeOut));
         setBlurPx(0);
-      } else if (p > 0.86 && p <= 1.0) {
+      } else if (p >= 0.95 && p <= 1.0) {
         setCurrentSection('final');
-        const fadeIn = Math.min(1, (p - 0.86) / 0.04);
+        const fadeIn = Math.min(1, (p - 0.95) / 0.03);
         setOpacity(fadeIn);
         setBlurPx(0);
       } else {
@@ -86,30 +84,58 @@ function SectionText() {
       </div>
     ),
     final: (
-      <div className="section-text center pointer-events-none" style={{ opacity, touchAction: 'pan-y' }}>
-        <div className="discovery-title" style={{ fontSize: 'clamp(0.75rem, 1.8vw, 1.15rem)' }}>
-          MISSION DISCOVERY
-        </div>
-        <div className="discovery-subtitle text-xs text-slate-400 mt-1">
-          Choose your mission destination
-        </div>
-        <div className="flex items-center justify-center gap-3 mt-4 flex-wrap pointer-events-auto">
-          <Link
-            to="/earth"
-            className="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 bg-cyan-600/90 hover:bg-cyan-500 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)] border border-cyan-400/50 backdrop-blur-xl transition-all cursor-pointer"
-            title="Explore 3D Earth tracking and orbital space debris"
-          >
-            <Globe className="w-4 h-4 text-cyan-200" />
-            <span>Explore Earth</span>
-          </Link>
-          <Link
-            to="/alert"
-            className="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 bg-red-600/90 hover:bg-red-500 text-white shadow-[0_0_20px_rgba(239,68,68,0.4)] border border-red-400/50 backdrop-blur-xl transition-all cursor-pointer"
-            title="View critical conjunction warnings and collision avoidance"
-          >
-            <ShieldAlert className="w-4 h-4 text-red-200" />
-            <span>View Alerts</span>
-          </Link>
+      <div
+        className="section-text pointer-events-none"
+        style={{
+          opacity,
+          position: 'fixed',
+          bottom: '12%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 30,
+          touchAction: 'pan-y',
+          transition: 'opacity 0.3s ease',
+        }}
+      >
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '12px 32px',
+          background: 'rgba(6, 10, 24, 0.65)',
+          borderRadius: '16px',
+          border: '1.5px solid rgba(0, 229, 255, 0.35)',
+          boxShadow: '0 0 35px rgba(0, 229, 255, 0.22), inset 0 0 15px rgba(0, 229, 255, 0.08)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          textAlign: 'center',
+          whiteSpace: 'nowrap',
+        }}>
+          <div style={{
+            fontFamily: "'Orbitron', monospace",
+            fontSize: 'clamp(1.05rem, 2.2vw, 1.45rem)',
+            fontWeight: 800,
+            letterSpacing: '0.38em',
+            color: '#00e5ff',
+            textTransform: 'uppercase',
+            textShadow: '0 0 20px rgba(0, 229, 255, 0.9), 0 0 40px rgba(0, 229, 255, 0.5)',
+            lineHeight: 1.2,
+          }}>
+            MISSION DISCOVERY
+          </div>
+          <div style={{
+            fontFamily: "'Orbitron', monospace",
+            fontSize: 'clamp(0.65rem, 1.1vw, 0.82rem)',
+            fontWeight: 700,
+            letterSpacing: '0.28em',
+            color: '#3b82f6',
+            textTransform: 'uppercase',
+            textShadow: '0 0 14px rgba(59, 130, 246, 0.9), 0 0 28px rgba(59, 130, 246, 0.5)',
+            lineHeight: 1.2,
+          }}>
+            CHOOSE YOUR MISSION DESTINATION
+          </div>
         </div>
       </div>
     ),
