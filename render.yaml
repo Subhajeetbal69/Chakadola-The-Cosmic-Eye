@@ -6,8 +6,7 @@ services:
     name: chakadola-the-cosmic-eye
     runtime: node
     region: singapore   # Closest to your Supabase ap-northeast-1 (Tokyo). Adjust if needed.
-    plan: starter        # $7/mo — required for always-on WebSocket support (no spindown)
-    # plan: free         # FREE but spins down after 15 min inactivity — NOT recommended for WS
+    plan: free
 
     buildCommand: npm install && npm run build
     startCommand: npm start
