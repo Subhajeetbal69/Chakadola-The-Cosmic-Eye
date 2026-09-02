@@ -502,24 +502,6 @@ function ResponsePanel({ onOpenBurn, priority, pair }: { onOpenBurn: () => void;
             </div>
           </div>
 
-          {/* Gemini API Live Token & Metadata Bar */}
-          {assessment?._meta && (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-cyan-500/20 bg-cyan-950/20 px-3 py-2 text-[10px] font-mono text-cyan-300">
-              <div className="flex items-center gap-3">
-                <span>Model: <strong>{assessment._meta.model}</strong></span>
-                {assessment._meta.usage && (
-                  <span>
-                    Tokens: <strong>{assessment._meta.usage.totalTokenCount}</strong> (Prompt: {assessment._meta.usage.promptTokenCount}, Output: {assessment._meta.usage.candidatesTokenCount})
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 text-slate-400">
-                <span>Generated: {new Date(assessment._meta.generatedAt).toLocaleTimeString()} UTC</span>
-                <span>· {assessment._meta.toolIterations} tool loops</span>
-              </div>
-            </div>
-          )}
-
           {/* Identified Risk Factors (Gemini Tool Insights) */}
           {assessment?.risk_factors && assessment.risk_factors.length > 0 && (
             <div className="space-y-2">
@@ -550,16 +532,20 @@ function ResponsePanel({ onOpenBurn, priority, pair }: { onOpenBurn: () => void;
 
           {/* Orbital Trend */}
           {assessment?.trend && (
-            <div className="flex items-center gap-3 rounded-lg border border-white/8 bg-black/20 px-3.5 py-2.5 text-xs">
-              <span className="font-mono text-[10px] uppercase tracking-[.14em] text-[#9bac83]">Historical Trend:</span>
-              <span className={`font-mono font-bold uppercase ${
-                assessment.trend.direction === 'worsening' ? 'text-[#f18b78]' :
-                assessment.trend.direction === 'improving' ? 'text-emerald-400' :
-                'text-[#cbd98a]'
-              }`}>
-                {assessment.trend.direction}
-              </span>
-              <span className="text-[#8f9d94] truncate">· {assessment.trend.explanation}</span>
+            <div className="rounded-xl border border-white/12 bg-white/[.04] p-3.5 transition-all space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-[10px] uppercase tracking-[.16em] text-[#cbd98a]">Historical Trend</span>
+                <span className={`rounded px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${
+                  assessment.trend.direction === 'worsening' ? 'bg-[#f18b78]/20 text-[#ffae9d] border border-[#f18b78]/30' :
+                  assessment.trend.direction === 'improving' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' :
+                  'bg-[#cbd98a]/20 text-[#dce9a0] border border-[#cbd98a]/30'
+                }`}>
+                  {assessment.trend.direction}
+                </span>
+              </div>
+              <p className="text-xs leading-relaxed text-[#d6ded6]">
+                {assessment.trend.explanation}
+              </p>
             </div>
           )}
 
