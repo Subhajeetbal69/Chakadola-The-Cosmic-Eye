@@ -291,6 +291,9 @@ async function startServer() {
   const app = express();
   const PORT = parseInt(process.env.PORT || '3000', 10);
 
+  // Enable trust proxy for cloud deployment (Render, Cloudflare, etc.)
+  app.set('trust proxy', 1);
+
   // ── 1. HTTP Security Headers & Payload Size Clamping ─────────────
   app.use(
     helmet({
@@ -307,6 +310,7 @@ async function startServer() {
     max: 240,
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { xForwardedForHeader: false },
     message: { success: false, error: 'Too many requests. Please slow down.' }
   });
   app.use('/api/', apiGeneralLimiter);
@@ -317,6 +321,7 @@ async function startServer() {
     max: 12,
     standardHeaders: true,
     legacyHeaders: false,
+    validate: { xForwardedForHeader: false },
     message: { success: false, error: 'Computation rate limit exceeded. Please wait before retrying.' }
   });
   app.use('/api/tle/fetch', heavyComputationLimiter);
