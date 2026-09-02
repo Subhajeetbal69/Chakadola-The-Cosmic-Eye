@@ -410,29 +410,15 @@ export function EarthPage() {
 
       {/* ── Catalog Registry Modal / Overlay ───────────────────── */}
       {activeTab === 'CATALOG' && (
-        <div className="fixed inset-4 sm:inset-10 z-50 bg-slate-950/85 border border-white/15 rounded-3xl p-4 sm:p-6 shadow-2xl backdrop-blur-2xl overflow-auto flex flex-col">
-          <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/10">
-            <div className="flex items-center gap-2 text-cyan-400 font-mono text-sm font-bold">
-              <Layers className="w-4 h-4" />
-              <span>TRACKED OBJECTS REGISTRY ({objects.length})</span>
-            </div>
-            <button
-              onClick={() => setActiveTab('3D')}
-              className="px-3.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(6,182,212,0.4)] cursor-pointer"
-            >
-              <Globe className="w-3.5 h-3.5" />
-              <span>Return to 3D Earth</span>
-            </button>
-          </div>
-          <div className="flex-1 min-h-[400px]">
-            <TrackedObjectsCatalog
-              objects={objects}
-              onSelectObject={(obj) => {
-                setSelectedObject(obj);
-                setIsDossierOpen(true);
-              }}
-            />
-          </div>
+        <div className="fixed inset-0 z-50 bg-[#071019] animate-in fade-in duration-200">
+          <TrackedObjectsCatalog
+            objects={objects}
+            onSelectObject={(obj) => {
+              setSelectedObject(obj);
+              setIsDossierOpen(true);
+            }}
+            onClose={() => setActiveTab('3D')}
+          />
         </div>
       )}
     </div>

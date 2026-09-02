@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tracked Objects Registry — Asteria Mission Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Spectral:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:        #071019;
+      --panel:     #0b1520;
+      --surface:   #0d1e2c;
+      --line:      rgba(201,217,138,.11);
+      --line-dim:  rgba(255,255,255,.055);
+      --line-row:  rgba(255,255,255,.038);
+      --text:      #edf2ec;
+      --muted:     #8ca49a;
+      --dim:       #445852;
+      --lime:      #c9d98a;
+      --lime-lo:   rgba(201,217,138,.06);
+      --lime-mid:  rgba(201,217,138,.14);
+      --lime-glo:  rgba(201,217,138,.28);
+      --green:     #7fcf8a;
+      --red:       #f0506a;
+      --blue:      #5c9bff;
+      --amber:     #f5a524;
+      --mono: "DM Mono", ui-monospace, monospace;
+      --sans: Manrope, Arial, sans-serif;
+      --serif: Spectral, Georgia, serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: 100%; overflow: hidden; font-family: var(--sans); color: var(--text); background: var(--bg); }
+
+    /* ── Page shell ── */
+    .shell {
+      display: grid;
+      grid-template-rows: 48px 1fr;
+      height: 100vh;
+    }
+
+    /* ────────────────────────────────
+       TOP BAR
+    ──────────────────────────────── */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 22px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(13,28,42,.97), rgba(9,18,27,.94));
+      backdrop-filter: blur(8px);
+      z-index: 30; flex-shrink: 0;
+    }
+    .topbar-left {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .topbar-icon { color: var(--lime); display: flex; }
+    .topbar-icon svg { width: 16px; height: 16px; }
+    .topbar-title {
+      font-family: var(--mono); font-size: 11px; font-weight: 500;
+      letter-spacing: .20em; text-transform: uppercase; color: var(--lime);
+    }
+    .topbar-count {
+      font-family: var(--mono); font-size: 10px; color: var(--muted);
+      letter-spacing: .08em;
+    }
+    .btn-return {
+      display: inline-flex; align-items: center; gap: 7px;
+      font-family: var(--mono); font-size: 11px; font-weight: 500;
+      letter-spacing: .08em; padding: 7px 14px;
+      border-radius: 9px; border: 1px solid rgba(201,217,138,.28);
+      background: rgba(201,217,138,.07); color: var(--lime);
+      cursor: pointer; transition: .18s;
+    }
+    .btn-return svg { width: 13px; height: 13px; }
+    .btn-return:hover { background: rgba(201,217,138,.14); border-color: rgba(201,217,138,.45); }
+
+    /* ────────────────────────────────
+       MAIN CONTENT AREA
+    ──────────────────────────────── */
+    .main {
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 70% 20%, rgba(94,129,91,.09), transparent 40%),
+        radial-gradient(circle at 15% 80%, rgba(201,217,138,.05), transparent 40%),
+        var(--bg);
+    }
+
+    /* ── Catalog header section ── */
+    .catalog-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--line-dim);
+      flex-shrink: 0;
+      gap: 20px;
+    }
+    .catalog-head-left { display: flex; flex-direction: column; gap: 6px; }
+    .catalog-head-title {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .catalog-head-title svg { width: 15px; height: 15px; color: var(--lime); flex-shrink: 0; }
+    .catalog-head-title span {
+      font-family: var(--mono); font-size: 11.5px; font-weight: 500;
+      letter-spacing: .18em; text-transform: uppercase; color: var(--text);
+    }
+    .catalog-head-sub {
+      font-size: 13px; color: var(--muted); line-height: 1.5;
+      max-width: 520px;
+    }
+    /* Filter tabs */
+    .filter-tabs {
+      display: flex; align-items: center; gap: 5px; flex-shrink: 0;
+    }
+    .ftab {
+      font-family: var(--mono); font-size: 11px; font-weight: 500;
+      letter-spacing: .06em; padding: 7px 14px; border-radius: 9px;
+      border: 1px solid var(--line-dim); background: rgba(255,255,255,.03);
+      color: var(--muted); cursor: pointer; white-space: nowrap; transition: .18s;
+    }
+    .ftab:hover { color: var(--text); background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); }
+    .ftab.active {
+      color: #0f1a06;
+      background: linear-gradient(170deg, #d9ed98, #b2c85a);
+      border-color: transparent;
+      box-shadow: 0 5px 16px -5px rgba(180,210,80,.5), 0 0 0 1px rgba(255,255,255,.08) inset;
+    }
+
+    /* ── Search + pagination row ── */
+    .toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--line-dim);
+      flex-shrink: 0; gap: 16px;
+    }
+    .search-wrap {
+      position: relative; flex: 1; max-width: 360px;
+    }
+    .search-wrap svg {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      width: 14px; height: 14px; color: var(--dim); pointer-events: none;
+    }
+    .search-input {
+      width: 100%; padding: 9px 14px 9px 36px;
+      border-radius: 10px; border: 1px solid var(--line-dim);
+      background: rgba(255,255,255,.035); color: var(--text);
+      font-family: var(--mono); font-size: 12px; outline: none;
+      transition: border-color .2s, background .2s, box-shadow .2s;
+    }
+    .search-input::placeholder { color: var(--dim); }
+    .search-input:focus {
+      border-color: rgba(201,217,138,.38);
+      background: rgba(201,217,138,.035);
+      box-shadow: 0 0 0 3px rgba(201,217,138,.07);
+    }
+    /* Pagination */
+    .pagination {
+      display: flex; align-items: center; gap: 6px;
+      font-family: var(--mono); font-size: 11px;
+    }
+    .page-info {
+      color: var(--muted); letter-spacing: .04em; white-space: nowrap;
+    }
+    .page-info strong { color: var(--text); font-weight: 500; }
+    .page-btns { display: flex; align-items: center; gap: 3px; }
+    .pbtn {
+      display: grid; place-items: center;
+      width: 28px; height: 28px; border-radius: 7px;
+      border: 1px solid var(--line-dim); background: rgba(255,255,255,.03);
+      color: var(--muted); cursor: pointer; font-family: var(--mono);
+      font-size: 11px; transition: .18s;
+    }
+    .pbtn:hover { color: var(--text); background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.12); }
+    .pbtn svg { width: 12px; height: 12px; }
+    .page-current {
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 10px; height: 28px; border-radius: 7px;
+      border: 1px solid rgba(201,217,138,.25);
+      background: rgba(201,217,138,.07);
+      font-family: var(--mono); font-size: 11px; color: var(--lime);
+      letter-spacing: .04em; white-space: nowrap;
+    }
+
+    /* ────────────────────────────────
+       TABLE
+    ──────────────────────────────── */
+    .table-wrap {
+      flex: 1; overflow-y: auto; overflow-x: auto;
+    }
+    /* Custom scrollbar */
+    .table-wrap::-webkit-scrollbar { width: 5px; height: 5px; }
+    .table-wrap::-webkit-scrollbar-track { background: transparent; }
+    .table-wrap::-webkit-scrollbar-thumb { background: rgba(201,217,138,.15); border-radius: 99px; }
+    .table-wrap::-webkit-scrollbar-thumb:hover { background: rgba(201,217,138,.28); }
+
+    table {
+      width: 100%; border-collapse: collapse;
+      table-layout: fixed;
+      min-width: 1060px;
+    }
+
+    /* Column widths */
+    col.c-norad   { width: 88px; }
+    col.c-name    { width: 200px; }
+    col.c-class   { width: 130px; }
+    col.c-orbit   { width: 160px; }
+    col.c-inc     { width: 108px; }
+    col.c-period  { width: 90px; }
+    col.c-alt     { width: 110px; }
+    col.c-vel     { width: 130px; }
+    col.c-inspect { width: 130px; }
+
+    /* Sticky column headers */
+    thead {
+      position: sticky; top: 0; z-index: 10;
+    }
+    thead tr {
+      background: rgba(9,16,25,.95);
+      border-bottom: 1px solid var(--line-dim);
+      backdrop-filter: blur(4px);
+    }
+    th {
+      font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+      letter-spacing: .16em; text-transform: uppercase; color: var(--dim);
+      padding: 11px 14px; text-align: left; white-space: nowrap;
+      border-right: 1px solid rgba(255,255,255,.025);
+    }
+    th:last-child { border-right: none; text-align: center; }
+    th.right { text-align: right; }
+    th.center { text-align: center; }
+
+    /* Column header sort indicator */
+    th.sortable { cursor: pointer; }
+    th.sortable:hover { color: var(--lime); }
+    th.sortable.asc::after  { content: " ↑"; color: var(--lime); }
+    th.sortable.desc::after { content: " ↓"; color: var(--lime); }
+
+    /* Body rows */
+    tbody tr {
+      border-bottom: 1px solid var(--line-row);
+      transition: background .14s;
+    }
+    tbody tr:hover { background: rgba(201,217,138,.03); }
+    tbody tr:hover td { border-right-color: rgba(255,255,255,.04); }
+
+    td {
+      padding: 13px 14px; vertical-align: middle;
+      border-right: 1px solid rgba(255,255,255,.022);
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    td:last-child { border-right: none; }
+
+    /* NORAD ID */
+    .norad-id {
+      font-family: var(--mono); font-size: 11.5px; color: var(--dim);
+      letter-spacing: .06em;
+    }
+
+    /* Object name */
+    .obj-name {
+      font-family: var(--mono); font-size: 12.5px; font-weight: 500;
+      color: var(--text); letter-spacing: .04em;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* Classification badge */
+    .class-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-family: var(--mono); font-size: 9.5px; font-weight: 500;
+      letter-spacing: .10em; text-transform: uppercase;
+      padding: 4px 9px; border-radius: 6px; white-space: nowrap;
+    }
+    .class-badge .bdot {
+      width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
+    }
+    .class-badge.sat {
+      color: var(--lime); border: 1px solid rgba(201,217,138,.28);
+      background: rgba(201,217,138,.06);
+    }
+    .class-badge.sat .bdot { background: var(--lime); }
+    .class-badge.deb {
+      color: #ff9faa; border: 1px solid rgba(240,80,106,.25);
+      background: rgba(240,80,106,.06);
+    }
+    .class-badge.deb .bdot { background: var(--red); }
+    .class-badge.rb {
+      color: #a0bcff; border: 1px solid rgba(92,155,255,.25);
+      background: rgba(92,155,255,.06);
+    }
+    .class-badge.rb .bdot { background: var(--blue); }
+
+    /* Perigee / Apogee */
+    .orbit-val {
+      font-family: var(--mono); font-size: 12px; color: var(--muted);
+      letter-spacing: .03em; white-space: nowrap;
+    }
+
+    /* Inclination */
+    .inc-val {
+      font-family: var(--mono); font-size: 12.5px; color: var(--text);
+    }
+
+    /* Period */
+    .period-val {
+      font-family: var(--mono); font-size: 12px; color: var(--muted);
+      white-space: nowrap;
+    }
+
+    /* Altitude — lime */
+    .alt-val {
+      font-family: var(--mono); font-size: 13px; font-weight: 500;
+      color: var(--lime); white-space: nowrap;
+    }
+    .alt-val small { font-size: 10.5px; color: var(--muted); font-weight: 400; margin-left: 2px; }
+
+    /* Velocity — lime + amber Mach */
+    .vel-cell {
+      display: flex; flex-direction: column; gap: 2px;
+      align-items: flex-end;
+    }
+    .vel-main {
+      font-family: var(--mono); font-size: 12.5px; font-weight: 500;
+      color: var(--lime); white-space: nowrap;
+    }
+    .vel-mach {
+      font-family: var(--mono); font-size: 10px; color: var(--amber);
+      letter-spacing: .04em; white-space: nowrap;
+    }
+
+    /* Inspect button */
+    .btn-inspect {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+      letter-spacing: .06em; padding: 7px 12px; border-radius: 8px;
+      border: 1px solid var(--line-dim); background: rgba(255,255,255,.03);
+      color: var(--muted); cursor: pointer; white-space: nowrap;
+      transition: color .18s, background .18s, border-color .18s, box-shadow .2s;
+      width: 100%;
+    }
+    .btn-inspect svg { width: 12px; height: 12px; flex-shrink: 0; }
+    .btn-inspect:hover {
+      color: var(--lime);
+      background: rgba(201,217,138,.07);
+      border-color: rgba(201,217,138,.30);
+      box-shadow: 0 4px 12px -4px rgba(201,217,138,.18);
+    }
+
+    /* Align right columns */
+    td.right { text-align: right; }
+    td.center { text-align: center; }
+
+    /* Empty state */
+    .empty-row td {
+      text-align: center; padding: 60px 20px;
+      color: var(--dim); font-family: var(--mono); font-size: 12px;
+      letter-spacing: .08em;
+    }
+
+    /* Row count footer */
+    .table-footer {
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 24px;
+      border-top: 1px solid var(--line-dim);
+      background: rgba(9,18,27,.6);
+    }
+    .tf-info {
+      font-family: var(--mono); font-size: 10px; letter-spacing: .10em;
+      color: var(--dim); text-transform: uppercase;
+    }
+    .tf-live {
+      display: flex; align-items: center; gap: 6px;
+      font-family: var(--mono); font-size: 10px; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--lime);
+    }
+    .tf-live .dot {
+      width: 5px; height: 5px; border-radius: 50%; background: var(--lime);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+
+    /* ── Search group (input + refresh) ── */
+    .search-group {
+      display: flex; align-items: center; gap: 8px;
+      flex: 1; max-width: 420px;
+    }
+    .search-group .search-wrap {
+      flex: 1; max-width: none;
+    }
+    .btn-refresh {
+      display: grid; place-items: center;
+      width: 34px; height: 34px; flex-shrink: 0;
+      border-radius: 9px; border: 1px solid var(--line-dim);
+      background: rgba(255,255,255,.03); color: var(--muted);
+      cursor: pointer; transition: color .18s, background .18s, border-color .18s, transform .35s;
+    }
+    .btn-refresh svg { width: 14px; height: 14px; }
+    .btn-refresh:hover { color: var(--lime); background: rgba(201,217,138,.07); border-color: rgba(201,217,138,.30); }
+    .btn-refresh.spinning svg { animation: spin .55s cubic-bezier(.4,0,.2,1); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ══ Responsive ══ */
+
+    /* Tablet: stack catalog-head, wrap filter tabs */
+    @media (max-width: 900px) {
+      .catalog-head {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 16px 20px 14px;
+      }
+      .filter-tabs { flex-wrap: wrap; }
+    }
+
+    /* Phablet: stack toolbar row */
+    @media (max-width: 680px) {
+      .topbar { padding: 0 14px; }
+      .topbar-count { display: none; }
+      .btn-return { padding: 6px 10px; font-size: 10px; gap: 5px; }
+
+      .catalog-head { padding: 14px 16px 12px; gap: 12px; }
+      .catalog-head-sub { font-size: 12px; }
+      .ftab { padding: 6px 11px; font-size: 10.5px; }
+
+      .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 10px 16px;
+      }
+      .search-group { max-width: 100%; }
+      .pagination { justify-content: space-between; }
+      .page-info { white-space: nowrap; }
+
+      .table-footer { padding: 8px 16px; flex-wrap: wrap; gap: 6px; }
+      .tf-info { font-size: 9.5px; }
+    }
+
+    /* Small phone */
+    @media (max-width: 420px) {
+      .topbar-title { font-size: 9.5px; letter-spacing: .14em; }
+      .catalog-head-title span { font-size: 10px; letter-spacing: .13em; }
+      .filter-tabs { gap: 4px; }
+      .ftab { padding: 5px 9px; font-size: 10px; }
+      .page-info { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ── Top bar ── -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+          <polyline points="2 17 12 22 22 17"/>
+          <polyline points="2 12 12 17 22 12"/>
+        </svg>
+      </span>
+      <span class="topbar-title">Tracked Objects Registry</span>
+      <span class="topbar-count">(2,323)</span>
+    </div>
+    <button class="btn-return">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"/>
+        <path d="M3.6 9h16.8M3.6 15h16.8"/>
+        <path d="M12 3c-2.5 3.5-2.5 14.5 0 18M12 3c2.5 3.5 2.5 14.5 0 18"/>
+      </svg>
+      Return to 3D Earth
+    </button>
+  </header>
+
+  <!-- ── Main ── -->
+  <div class="main">
+
+    <!-- Catalog header + filters -->
+    <div class="catalog-head">
+      <div class="catalog-head-left">
+        <div class="catalog-head-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+            <polyline points="2 17 12 22 22 17"/>
+            <polyline points="2 12 12 17 22 12"/>
+          </svg>
+          <span>Tracked Orbital Objects Catalog</span>
+        </div>
+        <p class="catalog-head-sub">
+          SGP4 orbital states, Keplerian parameters, and ECI coordinates across all 2,323 tracked LEO objects.
+        </p>
+      </div>
+      <div class="filter-tabs" id="filterTabs">
+        <button class="ftab active" data-filter="all">All (2,323)</button>
+        <button class="ftab" data-filter="sat">Active (1,276)</button>
+        <button class="ftab" data-filter="rb">R/B (146)</button>
+        <button class="ftab" data-filter="deb">Debris (901)</button>
+      </div>
+    </div>
+
+    <!-- Search + pagination -->
+    <div class="toolbar">
+      <div class="search-group">
+        <div class="search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>
+          </svg>
+          <input class="search-input" id="searchInput" type="text" placeholder="Search object name or NORAD ID…" autocomplete="off" spellcheck="false" />
+        </div>
+        <button class="btn-refresh" id="refreshBtn" title="Refresh data">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+            <path d="M21 3v5h-5"/>
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+            <path d="M3 21v-5h5"/>
+          </svg>
+        </button>
+      </div>
+      <div class="pagination">
+        <span class="page-info">Showing <strong id="rangeText">1–50</strong> of <strong id="totalText">2,323</strong></span>
+        <div class="page-btns">
+          <button class="pbtn" id="firstPage" title="First page">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="11 17 6 12 11 7"/><polyline points="18 17 13 12 18 7"/></svg>
+          </button>
+          <button class="pbtn" id="prevPage" title="Previous page">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span class="page-current" id="pageDisplay">1 / 47</span>
+          <button class="pbtn" id="nextPage" title="Next page">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+          <button class="pbtn" id="lastPage" title="Last page">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <table>
+        <colgroup>
+          <col class="c-norad" /><col class="c-name" /><col class="c-class" />
+          <col class="c-orbit" /><col class="c-inc" /><col class="c-period" />
+          <col class="c-alt" /><col class="c-vel" /><col class="c-inspect" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th class="sortable" data-col="norad">NORAD ID</th>
+            <th class="sortable" data-col="name">Object Name</th>
+            <th>Classification</th>
+            <th>Perigee / Apogee</th>
+            <th class="right sortable" data-col="inc">Inclination</th>
+            <th class="right sortable" data-col="period">Period</th>
+            <th class="right sortable" data-col="alt">Altitude</th>
+            <th class="right sortable" data-col="vel">Velocity</th>
+            <th class="center">Inspect</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Footer -->
+    <div class="table-footer">
+      <span class="tf-info">CelesTrak · SGP4 Propagation · LEO Invariant Filter ≤ 2,000 km</span>
+      <span class="tf-live"><span class="dot"></span>Live Snapshot Active</span>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ────────────────────────────────────────────────────────
+   Data seed — mirrors the screenshot + generated rows
+──────────────────────────────────────────────────────── */
+const SEED = [
+  { norad: 49141, name: 'STARLINK-3093', type: 'sat', per: '569.5', apo: '574.5', inc: 70.0, period: 96.1, alt: 578.0, vel: 7.57, mach: 22.1 },
+  { norad: 49140, name: 'STARLINK-3118', type: 'sat', per: '570.1', apo: '574.0', inc: 70.0, period: 96.1, alt: 586.5, vel: 7.57, mach: 22.1 },
+  { norad: 52550, name: 'STARLINK-3965', type: 'sat', per: '462.1', apo: '463.2', inc: 53.2, period: 93.8, alt: 480.7, vel: 7.63, mach: 22.2 },
+  { norad: 47554, name: 'STARLINK-1953', type: 'sat', per: '546.1', apo: '548.4', inc: 53.1, period: 95.6, alt: 505.7, vel: 7.61, mach: 22.2 },
+  { norad: 44713, name: 'STARLINK-1007', type: 'sat', per: '546.2', apo: '548.2', inc: 53.1, period: 95.6, alt: 557.6, vel: 7.58, mach: 22.1 },
+  { norad: 44914, name: 'STARLINK-1073', type: 'sat', per: '546.2', apo: '548.2', inc: 53.1, period: 95.6, alt: 555.0, vel: 7.58, mach: 22.1 },
+  { norad: 44724, name: 'STARLINK-1019', type: 'sat', per: '179.8', apo: '185.7', inc: 53.0, period: 88.2, alt: 182.7, vel: 7.79, mach: 22.7 },
+];
+
+/* Generate additional rows to fill out the table */
+const TYPES = ['sat','sat','sat','sat','rb','deb'];
+const NAMES_SAT  = ['ONEWEB-','STARLINK-','IRIDIUM-','COSMO-','GPS IIF-','SENTINEL-','DOVE-'];
+const NAMES_DEB  = ['COSMOS 2251 DEB','FENGYUN 1C DEB','IRIDIUM 33 DEB','CZ-6A DEB','SL-8 DEB'];
+const NAMES_RB   = ['CZ-3B R/B','FALCON 9 R/B','ARIANE 5 R/B','CENTAUR R/B','SL-12 R/B'];
+
+function rnd(lo, hi, dec) { return parseFloat((Math.random()*(hi-lo)+lo).toFixed(dec)); }
+
+const ALL_DATA = [...SEED];
+let id = 40000;
+for (let i = 0; i < 2316; i++) {
+  const type = TYPES[Math.floor(Math.random()*TYPES.length)];
+  let name;
+  if (type === 'sat') name = NAMES_SAT[Math.floor(Math.random()*NAMES_SAT.length)] + (Math.floor(Math.random()*9000)+1000);
+  else if (type === 'deb') name = NAMES_DEB[Math.floor(Math.random()*NAMES_DEB.length)];
+  else name = NAMES_RB[Math.floor(Math.random()*NAMES_RB.length)];
+  const alt = rnd(180, 1800, 1);
+  const vel = parseFloat((7.91*Math.sqrt(6371/(6371+alt))).toFixed(2));
+  const mach = parseFloat((vel/0.343).toFixed(1));
+  const period = parseFloat((2*Math.PI*Math.sqrt(Math.pow(6371+alt,3)/398600.4418)/60).toFixed(1));
+  const delta = rnd(0.1, 5, 1);
+  ALL_DATA.push({
+    norad: id++,
+    name,
+    type,
+    per: String(rnd(alt-5, alt, 1)),
+    apo: String(rnd(alt, alt+5, 1)),
+    inc: rnd(0, 97, 1),
+    period,
+    alt,
+    vel,
+    mach,
+  });
+}
+
+/* ── State ── */
+const PAGE_SIZE = 50;
+let currentPage  = 1;
+let activeFilter = 'all';
+let searchQuery  = '';
+let sortCol      = null;
+let sortDir      = 1;
+
+function filteredData() {
+  let rows = ALL_DATA;
+  if (activeFilter !== 'all') rows = rows.filter(r => r.type === activeFilter);
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    rows = rows.filter(r =>
+      r.name.toLowerCase().includes(q) ||
+      String(r.norad).includes(q)
+    );
+  }
+  if (sortCol) {
+    rows = [...rows].sort((a, b) => {
+      const av = typeof a[sortCol] === 'string' ? a[sortCol].toLowerCase() : a[sortCol];
+      const bv = typeof b[sortCol] === 'string' ? b[sortCol].toLowerCase() : b[sortCol];
+      return av < bv ? -sortDir : av > bv ? sortDir : 0;
+    });
+  }
+  return rows;
+}
+
+function badgeHtml(type) {
+  const map = {
+    sat: ['sat','Active Sat'],
+    deb: ['deb','Debris'],
+    rb:  ['rb', 'R/B'],
+  };
+  const [cls, label] = map[type] || ['sat','Active Sat'];
+  return `<span class="class-badge ${cls}"><span class="bdot"></span>${label}</span>`;
+}
+
+function render() {
+  const rows  = filteredData();
+  const total = rows.length;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  currentPage = Math.min(currentPage, pages);
+
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const end   = Math.min(start + PAGE_SIZE, total);
+  const slice = rows.slice(start, end);
+
+  /* Update pagination info */
+  document.getElementById('rangeText').textContent  = total === 0 ? '0' : `${start+1}–${end}`;
+  document.getElementById('totalText').textContent  = total.toLocaleString();
+  document.getElementById('pageDisplay').textContent = `${currentPage} / ${pages}`;
+
+  /* Render rows */
+  const tbody = document.getElementById('tableBody');
+  if (slice.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="9">No objects match your search.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = slice.map(r => `
+    <tr>
+      <td><span class="norad-id">#${r.norad}</span></td>
+      <td><span class="obj-name">${r.name}</span></td>
+      <td>${badgeHtml(r.type)}</td>
+      <td><span class="orbit-val">${r.per} × ${r.apo} km</span></td>
+      <td class="right"><span class="inc-val">${r.inc.toFixed(1)}°</span></td>
+      <td class="right"><span class="period-val">${r.period} min</span></td>
+      <td class="right"><span class="alt-val">${r.alt.toFixed(1)}<small>km</small></span></td>
+      <td class="right">
+        <div class="vel-cell">
+          <span class="vel-main">${r.vel.toFixed(2)} km/s</span>
+          <span class="vel-mach">Mach ${r.mach.toFixed(1)}</span>
+        </div>
+      </td>
+      <td class="center">
+        <button class="btn-inspect">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+          Inspect
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+/* ── Filter tabs ── */
+document.getElementById('filterTabs').addEventListener('click', e => {
+  const btn = e.target.closest('.ftab');
+  if (!btn) return;
+  document.querySelectorAll('.ftab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeFilter = btn.dataset.filter;
+  currentPage = 1;
+  render();
+});
+
+/* ── Search ── */
+document.getElementById('searchInput').addEventListener('input', e => {
+  searchQuery = e.target.value.trim();
+  currentPage = 1;
+  render();
+});
+
+/* ── Pagination ── */
+document.getElementById('firstPage').addEventListener('click', () => { currentPage = 1; render(); });
+document.getElementById('lastPage').addEventListener('click',  () => { currentPage = Math.ceil(filteredData().length / PAGE_SIZE); render(); });
+document.getElementById('prevPage').addEventListener('click',  () => { if (currentPage > 1) { currentPage--; render(); } });
+document.getElementById('nextPage').addEventListener('click',  () => {
+  const pages = Math.ceil(filteredData().length / PAGE_SIZE);
+  if (currentPage < pages) { currentPage++; render(); }
+});
+
+/* ── Column sorting ── */
+document.querySelectorAll('th.sortable').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    const colMap = { norad:'norad', name:'name', inc:'inc', period:'period', alt:'alt', vel:'vel' };
+    const field = colMap[col];
+    if (!field) return;
+    if (sortCol === field) sortDir = -sortDir;
+    else { sortCol = field; sortDir = 1; }
+    document.querySelectorAll('th.sortable').forEach(t => t.classList.remove('asc','desc'));
+    th.classList.add(sortDir === 1 ? 'asc' : 'desc');
+    currentPage = 1;
+    render();
+  });
+});
+
+/* ── Inspect buttons (delegated) ── */
+document.getElementById('tableBody').addEventListener('click', e => {
+  const btn = e.target.closest('.btn-inspect');
+  if (!btn) return;
+  const row = btn.closest('tr');
+  const name = row.querySelector('.obj-name')?.textContent;
+  /* In production: open dossier modal for this object */
+  console.log('Inspect:', name);
+});
+
+/* ── Refresh button ── */
+document.getElementById('refreshBtn').addEventListener('click', function () {
+  this.classList.add('spinning');
+  this.addEventListener('animationend', () => this.classList.remove('spinning'), { once: true });
+  currentPage = 1;
+  render();
+});
+
+/* ── Init ── */
+render();
+</script>
+</body>
+</html>
