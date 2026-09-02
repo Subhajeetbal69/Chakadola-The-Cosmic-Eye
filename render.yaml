@@ -3,7 +3,7 @@
 
 services:
   - type: web
-    name: space-debris-tracker
+    name: chakadola-the-cosmic-eye
     runtime: node
     region: singapore   # Closest to your Supabase ap-northeast-1 (Tokyo). Adjust if needed.
     plan: starter        # $7/mo — required for always-on WebSocket support (no spindown)
@@ -23,7 +23,7 @@ services:
         value: 10000      # Render injects its own PORT; this is a safe default
 
       - key: APP_URL
-        value: https://space-debris-tracker.onrender.com  # Update after first deploy
+        value: https://chakadola-the-cosmic-eye.onrender.com
 
       - key: GEMINI_API_KEY
         sync: false       # Must be manually set in Render dashboard (secret)

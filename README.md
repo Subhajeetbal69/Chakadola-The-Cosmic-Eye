@@ -1,6 +1,6 @@
-# LEO Space Object Tracking & Conjunction Assessment System
+# Chakadola — The Cosmic Eye: LEO Space Object Tracking & Conjunction Assessment System
 
-[![Status](https://img.shields.io/badge/Status-Advanced_Prototype-blue.svg)](https://github.com/omprakashkar-2529/Space_Debris_Tracker)
+[![Status](https://img.shields.io/badge/Status-Advanced_Prototype-blue.svg)](https://chakadola-the-cosmic-eye.onrender.com)
 [![Runtime](https://img.shields.io/badge/Node.js-20+-green.svg)](https://nodejs.org)
 [![Frontend](https://img.shields.io/badge/React-19.0.1-61dafb.svg)](https://react.dev)
 [![Astrodynamics](https://img.shields.io/badge/Astrodynamics-SGP4_%2F_Keplerian-orange.svg)](https://celestrak.org)
