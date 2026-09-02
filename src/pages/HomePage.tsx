@@ -9,6 +9,7 @@ import LoadingScreen from '../components/moon/LoadingScreen';
 import missionState from '../stores/missionStore';
 import { useTelemetry } from '../context/TelemetryContext';
 import { NavPill } from '../components/NavPill';
+import './MissionBanner.css';
 
 /**
  * SectionText — dynamic text transitions triggered by scroll progress.
@@ -97,45 +98,13 @@ function SectionText() {
           transition: 'opacity 0.3s ease',
         }}
       >
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '6px',
-          padding: '12px 32px',
-          background: 'rgba(6, 10, 24, 0.65)',
-          borderRadius: '16px',
-          border: '1.5px solid rgba(0, 229, 255, 0.35)',
-          boxShadow: '0 0 35px rgba(0, 229, 255, 0.22), inset 0 0 15px rgba(0, 229, 255, 0.08)',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
-          textAlign: 'center',
-          whiteSpace: 'nowrap',
-        }}>
-          <div style={{
-            fontFamily: "'Orbitron', monospace",
-            fontSize: 'clamp(1.05rem, 2.2vw, 1.45rem)',
-            fontWeight: 800,
-            letterSpacing: '0.38em',
-            color: '#00e5ff',
-            textTransform: 'uppercase',
-            textShadow: '0 0 20px rgba(0, 229, 255, 0.9), 0 0 40px rgba(0, 229, 255, 0.5)',
-            lineHeight: 1.2,
-          }}>
-            MISSION DISCOVERY
-          </div>
-          <div style={{
-            fontFamily: "'Orbitron', monospace",
-            fontSize: 'clamp(0.65rem, 1.1vw, 0.82rem)',
-            fontWeight: 700,
-            letterSpacing: '0.28em',
-            color: '#3b82f6',
-            textTransform: 'uppercase',
-            textShadow: '0 0 14px rgba(59, 130, 246, 0.9), 0 0 28px rgba(59, 130, 246, 0.5)',
-            lineHeight: 1.2,
-          }}>
-            CHOOSE YOUR MISSION DESTINATION
-          </div>
+        <div className="banner" role="button" tabIndex={0} aria-label="Mission Discovery — Choose your mission destination">
+          <span className="corner tl"></span>
+          <span className="corner tr"></span>
+          <span className="corner bl"></span>
+          <span className="corner br"></span>
+          <span className="banner-title">Mission Discovery</span>
+          <span className="banner-sub">Choose your mission destination</span>
         </div>
       </div>
     ),

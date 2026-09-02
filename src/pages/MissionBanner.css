@@ -1,0 +1,103 @@
+:root {
+  --line:     rgba(201,217,138,.13);
+  --lime:     #c9d98a;
+  --muted:    #8ca49a;
+  --mono:     "DM Mono", ui-monospace, monospace;
+}
+
+/* ── Banner ── */
+.banner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 26px 56px 28px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: linear-gradient(
+    160deg,
+    rgba(13,28,42,.96) 0%,
+    rgba(9,17,26,.98) 60%,
+    rgba(7,14,22,1)   100%
+  );
+  box-shadow:
+    0 0 0 1px rgba(201,217,138,.06) inset,
+    0 0 32px -8px rgba(201,217,138,.14),
+    0 24px 56px -16px rgba(0,0,0,.7);
+  cursor: pointer;
+  overflow: hidden;
+  user-select: none;
+  transition: border-color .22s, box-shadow .22s;
+}
+
+/* Subtle top-edge lime sheen */
+.banner::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 10%; right: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201,217,138,.35), transparent);
+  border-radius: 99px;
+}
+
+/* Inner glow vignette */
+.banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at 50% 30%,
+    rgba(201,217,138,.06) 0%,
+    transparent 65%
+  );
+  pointer-events: none;
+}
+
+.banner:hover {
+  border-color: rgba(201,217,138,.28);
+  box-shadow:
+    0 0 0 1px rgba(201,217,138,.10) inset,
+    0 0 44px -8px rgba(201,217,138,.22),
+    0 24px 56px -16px rgba(0,0,0,.7);
+}
+
+/* Title */
+.banner-title {
+  font-family: var(--mono);
+  font-size: clamp(22px, 4vw, 32px);
+  font-weight: 500;
+  letter-spacing: .30em;
+  text-transform: uppercase;
+  color: var(--lime);
+  text-shadow: 0 0 28px rgba(201,217,138,.35);
+  position: relative;
+  z-index: 1;
+  line-height: 1;
+}
+
+/* Subtitle */
+.banner-sub {
+  font-family: var(--mono);
+  font-size: clamp(9px, 1.4vw, 11.5px);
+  font-weight: 400;
+  letter-spacing: .40em;
+  text-transform: uppercase;
+  color: var(--muted);
+  position: relative;
+  z-index: 1;
+  line-height: 1;
+}
+
+/* Corner marks */
+.corner {
+  position: absolute;
+  width: 10px; height: 10px;
+  border-color: rgba(201,217,138,.28);
+  border-style: solid;
+}
+.corner.tl { top: 7px; left: 7px;  border-width: 1px 0 0 1px; border-radius: 3px 0 0 0; }
+.corner.tr { top: 7px; right: 7px; border-width: 1px 1px 0 0; border-radius: 0 3px 0 0; }
+.corner.bl { bottom: 7px; left: 7px;  border-width: 0 0 1px 1px; border-radius: 0 0 0 3px; }
+.corner.br { bottom: 7px; right: 7px; border-width: 0 1px 1px 0; border-radius: 0 0 3px 0; }

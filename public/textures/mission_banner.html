@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mission Discovery Banner — Asteria Mission Control</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:       #071019;
+      --panel:    #0b1520;
+      --line:     rgba(201,217,138,.13);
+      --line-dim: rgba(255,255,255,.06);
+      --text:     #edf2ec;
+      --muted:    #8ca49a;
+      --dim:      #4d6158;
+      --lime:     #c9d98a;
+      --lime-glo: rgba(201,217,138,.22);
+      --mono: "DM Mono", ui-monospace, monospace;
+      --sans: Manrope, Arial, sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      font-family: var(--sans);
+      display: grid;
+      place-items: center;
+      padding: 48px 24px;
+    }
+
+    /* ── Banner ── */
+    .banner {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 26px 56px 28px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: linear-gradient(
+        160deg,
+        rgba(13,28,42,.96) 0%,
+        rgba(9,17,26,.98) 60%,
+        rgba(7,14,22,1)   100%
+      );
+      box-shadow:
+        0 0 0 1px rgba(201,217,138,.06) inset,
+        0 0 32px -8px rgba(201,217,138,.14),
+        0 24px 56px -16px rgba(0,0,0,.7);
+      cursor: pointer;
+      overflow: hidden;
+      user-select: none;
+      transition: border-color .22s, box-shadow .22s;
+    }
+
+    /* Subtle top-edge lime sheen */
+    .banner::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 10%; right: 10%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(201,217,138,.35), transparent);
+      border-radius: 99px;
+    }
+
+    /* Inner glow vignette */
+    .banner::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(
+        ellipse at 50% 30%,
+        rgba(201,217,138,.06) 0%,
+        transparent 65%
+      );
+      pointer-events: none;
+    }
+
+    .banner:hover {
+      border-color: rgba(201,217,138,.28);
+      box-shadow:
+        0 0 0 1px rgba(201,217,138,.10) inset,
+        0 0 44px -8px rgba(201,217,138,.22),
+        0 24px 56px -16px rgba(0,0,0,.7);
+    }
+
+    /* Title */
+    .banner-title {
+      font-family: var(--mono);
+      font-size: clamp(22px, 4vw, 32px);
+      font-weight: 500;
+      letter-spacing: .30em;
+      text-transform: uppercase;
+      color: var(--lime);
+      text-shadow: 0 0 28px rgba(201,217,138,.35);
+      position: relative;
+      z-index: 1;
+      line-height: 1;
+    }
+
+    /* Subtitle */
+    .banner-sub {
+      font-family: var(--mono);
+      font-size: clamp(9px, 1.4vw, 11.5px);
+      font-weight: 400;
+      letter-spacing: .40em;
+      text-transform: uppercase;
+      color: var(--muted);
+      position: relative;
+      z-index: 1;
+      line-height: 1;
+    }
+
+    /* Corner marks */
+    .corner {
+      position: absolute;
+      width: 10px; height: 10px;
+      border-color: rgba(201,217,138,.28);
+      border-style: solid;
+    }
+    .corner.tl { top: 7px; left: 7px;  border-width: 1px 0 0 1px; border-radius: 3px 0 0 0; }
+    .corner.tr { top: 7px; right: 7px; border-width: 1px 1px 0 0; border-radius: 0 3px 0 0; }
+    .corner.bl { bottom: 7px; left: 7px;  border-width: 0 0 1px 1px; border-radius: 0 0 0 3px; }
+    .corner.br { bottom: 7px; right: 7px; border-width: 0 1px 1px 0; border-radius: 0 0 3px 0; }
+  </style>
+</head>
+<body>
+
+  <div class="banner" role="button" tabindex="0" aria-label="Mission Discovery — Choose your mission destination">
+    <span class="corner tl"></span>
+    <span class="corner tr"></span>
+    <span class="corner bl"></span>
+    <span class="corner br"></span>
+    <span class="banner-title">Mission Discovery</span>
+    <span class="banner-sub">Choose your mission destination</span>
+  </div>
+
+</body>
+</html>
